@@ -1,0 +1,16 @@
+node_modules
+dist
+dist-ssr
+*.local
+.wrangler
+.dev.vars
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+.env
+.env.*
+!.env.example
+.vercel
+.netlify
+.DS_Store
+*.log

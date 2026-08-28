@@ -1,0 +1,35 @@
+# Cấu hình Cloudflare Pages + Functions (mục Hỏi đáp).
+name = "ghn-m12-lichtai"
+compatibility_date = "2025-06-01"
+pages_build_output_dir = "dist"
+
+# Đăng nhập quản trị (Trợ lý Lịch Tải + trả lời góp ý).
+# ADMIN_USER là tên đăng nhập (không nhạy cảm) -> để ở [vars] được.
+# ADMIN_TOKEN (mật khẩu) KHÔNG để ở đây nữa: [vars] là plaintext, commit cùng source = lộ.
+#   -> đặt làm Cloudflare secret (mã hoá): chạy 1 lần
+#      npx wrangler pages secret put ADMIN_TOKEN --project-name=m12-lich-tai
+#   Code đọc env.ADMIN_TOKEN vẫn hoạt động bình thường (secret cũng nằm trong env).
+[vars]
+ADMIN_USER = "M12SC"
+# Google Sign-In (KHÔNG dùng theo yêu cầu user — để trống). Giữ biến để tương thích code.
+GOOGLE_CLIENT_ID = ""
+
+# ĐĂNG NHẬP OTP QUA EMAIL (Brevo):
+# - OTP_FROM_EMAIL / OTP_FROM_NAME: địa chỉ + tên người gửi (CÔNG KHAI -> để [vars]).
+#   OTP_FROM_EMAIL phải là "sender" đã xác minh trong Brevo (bấm link xác nhận, KHÔNG cần DNS).
+# - BREVO_API_KEY: KHÓA BÍ MẬT -> KHÔNG để đây. Đặt bằng:
+#     npx wrangler pages secret put BREVO_API_KEY --project-name=m12-lich-tai
+# - OTP_DEV_ECHO="1": chế độ TEST, trả mã ngay trong phản hồi khi CHƯA cấu hình email. Prod để trống.
+OTP_FROM_EMAIL = "thovdt@ghn.vn"
+OTP_FROM_NAME = "Dashboard M12"
+OTP_DEV_ECHO = ""
+
+# KV lưu câu hỏi/góp ý.
+[[kv_namespaces]]
+binding = "QA_KV"
+id = "0d49941320c2492197477f6f35fabe39"
+
+# Cloudflare Workers AI — LLM (llama) chạy NGAY trong Cloudflare: miễn phí, không quota Gemini,
+# KHÔNG bị WAF chặn (Groq chặn dải IP Cloudflare nên không gọi được từ đây). Đây là nguồn chính.
+[ai]
+binding = "AI"

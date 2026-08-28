@@ -1,0 +1,31 @@
+{
+  "name": "m12-lich-tai-mien-nam",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Dashboard CỤM 12 - LỊCH TẢI MIỀN NAM (GHN M12SC) - realtime từ Google Sheets",
+  "scripts": {
+    "dev": "vite",
+    "build:geo": "node scripts/build-geo.mjs",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --port 4173",
+    "prebuild": "node scripts/build-geo.mjs || echo \"(bỏ qua build:geo - dùng geo.json sẵn có)\"",
+    "deploy": "npm run build && npx wrangler pages deploy dist --project-name=m12-lich-tai --commit-dirty=true",
+    "auto": "node scripts/auto-deploy.mjs"
+  },
+  "dependencies": {
+    "leaflet": "^1.9.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0"
+  },
+  "devDependencies": {
+    "@types/leaflet": "^1.9.12",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}
