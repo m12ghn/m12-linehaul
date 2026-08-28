@@ -1802,3 +1802,66 @@ footer .dot-sep { margin: 0 6px; opacity: .5; }
 .menu-perm .mp-label{font-weight:700;font-size: 15px;flex:1}
 .menu-perm .mp-state{font-size: 13.5px;font-weight:800;color:#9aa7b4}
 .menu-perm.on .mp-state{color:#6d28d9}
+
+/* ============================================================
+   MÀN NHẬP LIỆU LỊCH TẢI (đảo chiều — src/views/LichTaiNhap.tsx)
+   Dùng lại biến màu sẵn có của dashboard, không thêm hệ màu mới.
+   ============================================================ */
+.re-regions { flex-wrap: wrap; }
+
+.re-filters {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin: 12px 0;
+}
+.re-filters input[type="text"], .re-filters input { min-width: 260px; }
+
+.re-toolbar {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-bottom: 14px;
+}
+.re-new {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  width: 100%; padding: 12px; margin-top: 8px;
+  border: 1px dashed var(--border, #d0d5dd); border-radius: 10px;
+}
+.re-new > .muted { flex-basis: 100%; }
+
+.route-editor { margin-bottom: 14px; }
+.re-head {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-bottom: 10px;
+}
+.re-head .re-code { font-weight: 700; min-width: 150px; }
+
+.re-stops { width: 100%; border-collapse: collapse; font-size: 14px; }
+.re-stops th, .re-stops td {
+  padding: 5px 6px; text-align: left;
+  border-bottom: 1px solid var(--border, #e6e8ec);
+}
+.re-stops th { font-weight: 600; color: var(--muted, #667085); font-size: 12px; }
+.re-stops td:first-child, .re-stops th:first-child { width: 32px; color: var(--muted, #667085); }
+.re-stops input, .re-stops select { width: 100%; box-sizing: border-box; }
+.re-stops tr.rc-dirty { background: color-mix(in srgb, var(--orange, #f79009) 10%, transparent); }
+
+.rc-actions { display: flex; gap: 4px; white-space: nowrap; width: 1%; }
+.rc-actions button { padding: 2px 7px; font-size: 12px; }
+.rc-err {
+  color: var(--red, #d92d20); font-size: 13px; padding: 4px 6px;
+}
+button.danger {
+  color: var(--red, #d92d20);
+  border-color: color-mix(in srgb, var(--red, #d92d20) 40%, transparent);
+}
+
+.re-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.re-add-btn {
+  margin-top: 8px; font-size: 13px;
+  border-style: dashed;
+}
+
+@media (max-width: 760px) {
+  /* Bảng điểm dừng trên điện thoại: cho cuộn ngang trong thẻ, không đẩy vỡ trang. */
+  .route-editor { overflow-x: auto; }
+  .re-stops { min-width: 560px; }
+  .re-filters input { min-width: 0; flex: 1 1 100%; }
+}

@@ -9,7 +9,8 @@
    ============================================================ */
 import { useEffect, useState } from "react";
 import {
-  MODULES, DEFAULT_ROLES, buildDefaultMatrix, normalizeMatrix, moduleAllowed, canSub as canSubPerm,
+  MODULES, DEFAULT_ROLES, buildDefaultMatrix, normalizeMatrix, moduleAllowed,
+  canSub as canSubPerm, can as canPerm,
   type RoleDef, type PermMatrix, type ActionKey,
 } from "./rbac";
 import { adminHeaders, forceReauth, getUser } from "./useUser";
@@ -95,6 +96,15 @@ export function useMyRole() {
       // khoá nhầm toàn bộ; admin cấu hình quyền cho role đó thì mới áp.
       if (!mx?.[role]) return true;
       return moduleAllowed(mx, role, moduleKey);
+    },
+    /** Kiểm tra quyền cấp MODULE (view/edit/create/delete/approve/export).
+     *  Dùng cho màn Nhập liệu Lịch Tải: chỉ vai trò có `edit` mới thấy nút sửa/xoá,
+     *  chỉ vai trò có `export` mới thấy nút "Xuất ra Google Sheet".
+     *  Server VẪN kiểm tra lại (api/_lib/session.ts -> guard) — đây chỉ là phía hiển thị. */
+    canDo: (moduleKey: string, act: ActionKey = "view") => {
+      if (!MODULES.some((m) => m.key === moduleKey)) return true;
+      if (!mx?.[role]) return role === "admin";
+      return canPerm(mx, role, moduleKey, act);
     },
     /** Kiểm tra 1 chức năng con (vd "contact"/"gd" ở Performance NCC) có bị khoá riêng không. */
     canSub: (moduleKey: string, subKey: string, act: ActionKey = "view") => {
