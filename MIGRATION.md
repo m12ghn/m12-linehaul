@@ -92,6 +92,31 @@ supabase/migrations/0002_app.sql
 supabase/migrations/0003_rls.sql
 ```
 
+**Rồi BẮT BUỘC làm thêm 1 bước:** Studio → **Settings → API → Exposed schemas** → thêm `m12`.
+Quên bước này thì PostgREST không thấy schema và mọi lời gọi API trả 404.
+
+### Dùng chung project Supabase với hệ thống khác
+
+Toàn bộ 34 bảng nằm trong schema riêng **`m12`**, không đụng `public`. Đây là điều kiện
+để dùng chung project — những tên như `routes`, `accounts`, `roles`, `reports` cực dễ
+trùng nếu để chung `public`.
+
+| Việc | Cách làm |
+|---|---|
+| Chọn schema khi gọi API | Header `Accept-Profile` (đọc) / `Content-Profile` (ghi). Xử lý tập trung ở `api/_lib/supabase.ts` |
+| Đổi tên schema | Sửa `create schema` + `search_path` trong 3 file SQL, rồi đặt `SUPABASE_SCHEMA` khớp theo |
+| Quyền | `0003_rls.sql` cấp `service_role` quyền trên `m12`, thu hồi `anon`/`authenticated` — **chỉ trong `m12`**, không đụng quyền của hệ thống khác trên `public` |
+
+Hai điều cần biết khi dùng chung:
+
+1. **Sao lưu và khôi phục là của CẢ project.** Khôi phục vì sự cố của M12 sẽ kéo lùi luôn
+   dữ liệu của hệ thống kia. Nếu hệ thống kia cũng quan trọng, cân nhắc tách project riêng.
+2. **Một `service_role` key mở được cả hai schema.** Ai có key của project là đọc được hết.
+
+**Không dùng extension nào** (`pgcrypto`, `unaccent` đều đã bỏ): `gen_random_uuid()` có sẵn
+trong lõi Postgres 13+, còn bỏ dấu tiếng Việt làm bằng `translate()`. Nhờ vậy không phải
+xin quyền cài extension trên project chung, và tránh hẳn chuyện `unaccent` nằm ở schema nào.
+
 Nạp dữ liệu cũ:
 
 ```bash

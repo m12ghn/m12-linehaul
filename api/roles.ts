@@ -129,6 +129,7 @@ async function fetchUpsert(table: string, rows: any[], onConflict: string, actor
       apikey: env.SUPABASE_SERVICE_ROLE_KEY,
       authorization: "Bearer " + env.SUPABASE_SERVICE_ROLE_KEY,
       "content-type": "application/json",
+      "content-profile": env.SUPABASE_SCHEMA || "m12",
       "x-actor": actor,
       prefer: "resolution=merge-duplicates,return=minimal",
     },

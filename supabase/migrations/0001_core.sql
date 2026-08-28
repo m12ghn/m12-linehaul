@@ -3,40 +3,62 @@
 -- Supabase / PostgreSQL 15+
 --
 -- NGUYÊN TẮC ĐẢO CHIỀU: từ nay Postgres là NGUỒN SỰ THẬT DUY NHẤT.
--- Google Sheet chỉ còn là ĐÍCH XUẤT khi cần (xem api/export-sheet.ts),
--- không còn được đọc realtime, không ai nhập trên Sheet nữa.
+-- Google Sheet chỉ còn là ĐÍCH XUẤT (xem api/export-sheet.ts), không đọc
+-- realtime nữa, không ai nhập trên Sheet nữa.
+--
+-- ⚠ MỌI THỨ NẰM TRONG SCHEMA RIÊNG `m12`, KHÔNG đụng `public`.
+--   Nhờ vậy dùng chung được project Supabase với hệ thống khác: tên bảng
+--   `routes`, `accounts`, `reports`... rất dễ trùng nếu để chung `public`.
+--   Đổi tên schema: sửa DUY NHẤT dòng `create schema` + `search_path` dưới đây,
+--   rồi đặt biến môi trường SUPABASE_SCHEMA khớp theo (xem .env.example).
+--
+-- SAU KHI CHẠY 3 FILE NÀY, PHẢI làm thêm 1 bước trên Supabase Studio:
+--   Settings → API → Exposed schemas → thêm `m12`
+--   (không thêm thì PostgREST không thấy schema, API trả 404 hết).
 --
 -- Chạy: psql "$SUPABASE_DB_URL" -f supabase/migrations/0001_core.sql
 --   hoặc dán vào Supabase Studio → SQL Editor.
 -- ============================================================
 
-create extension if not exists "pgcrypto";   -- gen_random_uuid()
-create extension if not exists "unaccent";   -- chuẩn hoá tên kho tiếng Việt
+create schema if not exists m12;
+
+-- Mọi lệnh phía dưới tạo object trong m12. `public` để cuối cho các hàm dựng sẵn.
+set search_path = m12, public;
+
+-- CỐ Ý KHÔNG dùng extension nào:
+--   • gen_random_uuid() đã nằm trong lõi PostgreSQL từ 13 -> không cần pgcrypto.
+--   • bỏ dấu tiếng Việt làm bằng translate() thay cho unaccent -> không cần
+--     extension, và tránh rắc rối "unaccent nằm ở schema nào" khi dùng chung
+--     project (trên Supabase nó ở `extensions`, trên Postgres thường ở `public`).
+-- Nhờ vậy file này chạy được trên bất kỳ Postgres 13+ nào, không cần quyền admin.
 
 -- ------------------------------------------------------------
 -- 0. Tiện ích dùng chung
 -- ------------------------------------------------------------
 
--- unaccent() mặc định là STABLE (phụ thuộc search_path) -> KHÔNG dùng được trong
--- generated column / index. Bọc lại thành IMMUTABLE bằng cách chỉ đích danh từ điển.
-create or replace function m12_unaccent(txt text)
+/** Bỏ dấu tiếng Việt (và các dấu Latin khác). IMMUTABLE -> dùng được trong
+    generated column và index. Sinh tự động từ bảng Unicode, khớp với
+    stripAccents() của src/lib/normalize.ts. */
+create or replace function m12.m12_unaccent(txt text)
 returns text language sql immutable parallel safe as $$
-  select public.unaccent('public.unaccent'::regdictionary, coalesce(txt, ''))
+  select translate(coalesce(txt, ''),
+    'ÀÁÂÃÄÅÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝàáâãäåçèéêëìíîïñòóôõöùúûüýÿĀāĂăĄąĆćĈĉĊċČčĎďĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĨĩĪīĬĭĮįİĴĵĶķĹĺĻļĽľŃńŅņŇňŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŠšŢţŤťŨũŪūŬŭŮůŰűŲųŴŵŶŷŸŹźŻżŽžƠơƯưǍǎǏǐǑǒǓǔǕǖǗǘǙǚǛǜǞǟǠǡǦǧǨǩǪǫǬǭǰǴǵǸǹǺǻȀȁȂȃȄȅȆȇȈȉȊȋȌȍȎȏȐȑȒȓȔȕȖȗȘșȚțȞȟȦȧȨȩȪȫȬȭȮȯȰȱȲȳḀḁḂḃḄḅḆḇḈḉḊḋḌḍḎḏḐḑḒḓḔḕḖḗḘḙḚḛḜḝḞḟḠḡḢḣḤḥḦḧḨḩḪḫḬḭḮḯḰḱḲḳḴḵḶḷḸḹḺḻḼḽḾḿṀṁṂṃṄṅṆṇṈṉṊṋṌṍṎṏṐṑṒṓṔṕṖṗṘṙṚṛṜṝṞṟṠṡṢṣṤṥṦṧṨṩṪṫṬṭṮṯṰṱṲṳṴṵṶṷṸṹṺṻṼṽṾṿẀẁẂẃẄẅẆẇẈẉẊẋẌẍẎẏẐẑẒẓẔẕẖẗẘẙẠạẢảẤấẦầẨẩẪẫẬậẮắẰằẲẳẴẵẶặẸẹẺẻẼẽẾếỀềỂểỄễỆệỈỉỊịỌọỎỏỐốỒồỔổỖỗỘộỚớỜờỞởỠỡỢợỤụỦủỨứỪừỬửỮữỰựỲỳỴỵỶỷỸỹđĐ',
+    'AAAAAACEEEEIIIINOOOOOUUUUYaaaaaaceeeeiiiinooooouuuuyyAaAaAaCcCcCcCcDdEeEeEeEeEeGgGgGgGgHhIiIiIiIiIJjKkLlLlLlNnNnNnOoOoOoRrRrRrSsSsSsSsTtTtUuUuUuUuUuUuWwYyYZzZzZzOoUuAaIiOoUuUuUuUuUuAaAaGgKkOoOojGgNnAaAaAaEeEeIiIiOoOoRrRrUuUuSsTtHhAaEeOoOoOoOoYyAaBbBbBbCcDdDdDdDdDdEeEeEeEeEeFfGgHhHhHhHhHhIiIiKkKkKkLlLlLlLlMmMmMmNnNnNnNnOoOoOoOoPpPpRrRrRrRrSsSsSsSsSsTtTtTtTtUuUuUuUuUuVvVvWwWwWwWwWwXxXxYyZzZzZzhtwyAaAaAaAaAaAaAaAaAaAaAaAaEeEeEeEeEeEeEeEeIiIiOoOoOoOoOoOoOoOoOoOoOoOoUuUuUuUuUuUuUuYyYyYyYydD')
 $$;
 
 -- Chuẩn hoá tên kho/bưu cục: bỏ dấu, thường hoá, gom khoảng trắng.
 -- PHẢI khớp logic normalizeName() trong src/lib/normalize.ts — sửa 1 bên thì sửa bên kia
 -- (đúng quy ước đã có ở skill m12-conventions mục 3).
-create or replace function m12_norm(txt text)
+create or replace function m12.m12_norm(txt text)
 returns text language sql immutable parallel safe as $$
   select btrim(regexp_replace(
-           lower(m12_unaccent(coalesce(txt, ''))),
+           lower(m12.m12_unaccent(coalesce(txt, ''))),
            '[^a-z0-9]+', ' ', 'g'
          ))
 $$;
 
 -- Trigger tự cập nhật updated_at.
-create or replace function m12_touch()
+create or replace function m12.m12_touch()
 returns trigger language plpgsql as $$
 begin
   new.updated_at := now();
@@ -58,7 +80,7 @@ create table if not exists regions (
   updated_at  timestamptz not null default now()
 );
 create trigger regions_touch before update on regions
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 insert into regions (key, legacy_gid, label, sort, hidden, excluded) values
   ('noi-thanh-hcm',     '0',          'Nội Thành HCM',     1, false, false),
@@ -76,7 +98,7 @@ create table if not exists warehouses (
   id            uuid primary key default gen_random_uuid(),
   warehouse_id  text unique,                  -- mã kho GHN (nếu có)
   name          text not null,
-  name_norm     text generated always as (m12_norm(name)) stored,
+  name_norm     text generated always as (m12.m12_norm(name)) stored,
   district_name text,
   province_name text,
   lat           double precision,
@@ -87,13 +109,13 @@ create table if not exists warehouses (
 );
 create index if not exists warehouses_name_norm_idx on warehouses (name_norm);
 create trigger warehouses_touch before update on warehouses
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 -- Bí danh tên kho (thay ALIASES hardcode trong src/lib/geo.ts) — sửa được trên dashboard.
 create table if not exists warehouse_aliases (
   id           uuid primary key default gen_random_uuid(),
   alias        text not null,
-  alias_norm   text generated always as (m12_norm(alias)) stored,
+  alias_norm   text generated always as (m12.m12_norm(alias)) stored,
   warehouse_id uuid not null references warehouses(id) on delete cascade,
   created_at   timestamptz not null default now()
 );
@@ -105,7 +127,7 @@ create unique index if not exists warehouse_aliases_norm_uidx on warehouse_alias
 create table if not exists suppliers (
   id           uuid primary key default gen_random_uuid(),
   name         text not null,
-  name_norm    text generated always as (m12_norm(name)) stored,
+  name_norm    text generated always as (m12.m12_norm(name)) stored,
   short_name   text,
   phone        text,
   contact      text,
@@ -117,7 +139,7 @@ create table if not exists suppliers (
 );
 create unique index if not exists suppliers_name_norm_uidx on suppliers (name_norm);
 create trigger suppliers_touch before update on suppliers
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 -- ------------------------------------------------------------
 -- 4. TUYẾN + ĐIỂM DỪNG  ← TRÁI TIM CỦA VIỆC ĐẢO CHIỀU
@@ -151,7 +173,7 @@ create unique index if not exists routes_region_code_uidx on routes (region_key,
 create index if not exists routes_code_norm_idx on routes (code_norm);
 create index if not exists routes_category_idx on routes (region_key, category);
 create trigger routes_touch before update on routes
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 create table if not exists stops (
   id           uuid primary key default gen_random_uuid(),
@@ -171,7 +193,7 @@ create table if not exists stops (
 );
 create index if not exists stops_route_idx on stops (route_id, seq);
 create trigger stops_touch before update on stops
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 -- Danh mục giá trị hợp lệ cho "Loại hình" (thay hằng LOAI_HINH_VALUES hardcode).
 create table if not exists loai_hinh_values (
@@ -199,7 +221,7 @@ create table if not exists vehicles (
 );
 create index if not exists vehicles_code_norm_idx on vehicles (code_norm);
 create trigger vehicles_touch before update on vehicles
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 -- ------------------------------------------------------------
 -- 6. TĂNG CƯỜNG
@@ -232,7 +254,7 @@ create table if not exists tc_trips (
 create index if not exists tc_trips_ngay_idx on tc_trips (ngay, kind);
 create index if not exists tc_trips_code_idx on tc_trips (code);
 create trigger tc_trips_touch before update on tc_trips
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 -- Lịch TC cố định của kỳ event (tab "Lưu trữ TC EVENT" — mỗi SG_TCEV = 1 xe).
 create table if not exists tc_events (
@@ -252,7 +274,7 @@ create table if not exists tc_events (
 create unique index if not exists tc_events_ky_code_ngay_uidx
   on tc_events (ky, code, (coalesce(ngay, '1900-01-01'::date)));
 create trigger tc_events_touch before update on tc_events
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 -- Phiếu XIN TĂNG CƯỜNG (tab "BC xin tăng cường" — form ticket).
 -- Đây là bảng ĐƯỢC NHẬP NHIỀU NHẤT trên dashboard sau khi đảo chiều.
@@ -280,7 +302,7 @@ create table if not exists xin_tang_cuong (
 );
 create index if not exists xin_tc_ngay_idx on xin_tang_cuong (ngay desc, trang_thai);
 create trigger xin_tc_touch before update on xin_tang_cuong
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 -- Nhật ký ĐIỀU CHỈNH — BÁO NCC (tab "Điều chỉnh - Báo NCC").
 create table if not exists dieu_chinh_ncc (
@@ -303,7 +325,7 @@ create table if not exists dieu_chinh_ncc (
 );
 create index if not exists dcn_at_idx on dieu_chinh_ncc (at desc);
 create trigger dcn_touch before update on dieu_chinh_ncc
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 -- ------------------------------------------------------------
 -- 7. SỐ LIỆU ĐO LƯỜNG (nạp bằng ETL — read-mostly, không nhập tay)

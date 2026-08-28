@@ -7,10 +7,20 @@
    Biến môi trường (Vercel → Settings → Environment Variables):
      SUPABASE_URL               https://xxxx.supabase.co
      SUPABASE_SERVICE_ROLE_KEY  khoá service_role (BÍ MẬT — chỉ dùng server-side)
+     SUPABASE_SCHEMA            schema chứa dữ liệu M12 (mặc định "m12")
+
+   ⚠ DÙNG CHUNG PROJECT SUPABASE: toàn bộ bảng nằm trong schema riêng `m12`,
+   không phải `public`. PostgREST chọn schema qua header:
+       Accept-Profile   cho GET/HEAD
+       Content-Profile  cho POST/PATCH/PUT/DELETE
+   Thiếu 2 header này thì mọi request rơi về `public` và trả 404 (hoặc tệ hơn:
+   đụng nhầm bảng trùng tên của hệ thống khác). Xử lý tập trung ở headers() bên dưới.
+   Nhớ thêm `m12` vào Settings → API → Exposed schemas trên Supabase Studio.
    ============================================================ */
 
 const URL_ = () => must("SUPABASE_URL");
 const KEY_ = () => must("SUPABASE_SERVICE_ROLE_KEY");
+const SCHEMA = () => (globalThis as any).process?.env?.SUPABASE_SCHEMA || "m12";
 
 function must(name: string): string {
   const v = (globalThis as any).process?.env?.[name];
@@ -29,11 +39,16 @@ export interface QueryOpts {
   actor?: string;
 }
 
-function headers(actor?: string, extra: Record<string, string> = {}): Record<string, string> {
+function headers(method: string, actor?: string, extra: Record<string, string> = {}): Record<string, string> {
+  const schema = SCHEMA();
+  const reading = method === "GET" || method === "HEAD";
   const h: Record<string, string> = {
     apikey: KEY_(),
     authorization: "Bearer " + KEY_(),
     "content-type": "application/json",
+    // Chọn schema. GET dùng Accept-Profile, các lệnh ghi dùng Content-Profile —
+    // PostgREST phân biệt 2 header này, gửi nhầm là không có tác dụng.
+    ...(reading ? { "accept-profile": schema } : { "content-profile": schema }),
     ...extra,
   };
   // PostgREST chuyển các claim trong header này thành GUC -> trigger m12_audit() đọc được
@@ -43,9 +58,10 @@ function headers(actor?: string, extra: Record<string, string> = {}): Record<str
 }
 
 async function call(path: string, init: RequestInit, actor?: string): Promise<any> {
+  const method = (init.method || "GET").toUpperCase();
   const r = await fetch(URL_() + "/rest/v1/" + path, {
     ...init,
-    headers: { ...headers(actor), ...(init.headers as any) },
+    headers: { ...headers(method, actor), ...(init.headers as any) },
   });
   const txt = await r.text();
   if (!r.ok) throw new SupabaseError(r.status, txt);
@@ -105,7 +121,8 @@ export function remove(table: string, filter: Record<string, string>, actor?: st
   return call(table + qs({ filter }), { method: "DELETE" }, actor);
 }
 
-/** Gọi function SQL (rpc). Dùng cho bump_visits() và các thao tác nhiều bước. */
+/** Gọi function SQL (rpc). Dùng cho bump_visits() và các thao tác nhiều bước.
+ *  Hàm cũng nằm trong schema m12 -> Content-Profile do headers() gắn sẵn. */
 export function rpc<T = any>(fn: string, args: any = {}, actor?: string): Promise<T> {
   return call("rpc/" + fn, { method: "POST", body: JSON.stringify(args) }, actor);
 }

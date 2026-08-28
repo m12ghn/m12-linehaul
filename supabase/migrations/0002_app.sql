@@ -14,7 +14,13 @@
 --   extra:<id>         -> ai_context_sources
 --   cfg:*  / oauth:*   -> app_secrets  (⚠ chỉ đọc bằng service_role)
 --   ltedit:log:*       -> audit_log
+--
+-- ⚠ Cùng schema `m12` với 0001 — KHÔNG đụng `public`, để dùng chung project
+--   Supabase với hệ thống khác mà không sợ trùng tên bảng (`accounts`,
+--   `reports`, `roles`... là những tên cực dễ đụng).
 -- ============================================================
+
+set search_path = m12, public;
 
 -- ------------------------------------------------------------
 -- 1. Tài khoản & vai trò
@@ -49,7 +55,7 @@ create table if not exists accounts (
 );
 create unique index if not exists accounts_email_uidx on accounts (email_lc);
 create trigger accounts_touch before update on accounts
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 -- Ma trận quyền: 1 dòng = (vai trò × module × CHỨC NĂNG CON × hành động).
 -- Thay cho blob JSON "rbac:v1" -> truy vấn/kiểm tra được bằng SQL.
@@ -176,7 +182,7 @@ create table if not exists qa_threads (
 );
 create index if not exists qa_threads_created_idx on qa_threads (created_at desc);
 create trigger qa_threads_touch before update on qa_threads
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 create table if not exists qa_messages (
   id         uuid primary key default gen_random_uuid(),
@@ -234,7 +240,7 @@ create table if not exists reports (
   updated_at timestamptz not null default now()
 );
 create trigger reports_touch before update on reports
-  for each row execute function m12_touch();
+  for each row execute function m12.m12_touch();
 
 -- ------------------------------------------------------------
 -- 4. Khoá cấu hình + KV tổng hợp
@@ -256,9 +262,12 @@ insert into app_kv (key, value) values ('visits:total', '{"total":0}'::jsonb)
 on conflict (key) do nothing;
 
 -- Tăng bộ đếm lượt truy cập nguyên tử (thay read-modify-write trên KV, vốn hay mất số).
-create or replace function bump_visits()
+-- ⚠ Tên bảng GHI RÕ SCHEMA: hàm chạy theo search_path của NGƯỜI GỌI, không phải
+--   search_path lúc tạo hàm. PostgREST gọi với search_path riêng -> không ghi rõ là lỗi
+--   "relation app_kv does not exist". Áp dụng cho MỌI hàm/trigger dưới đây.
+create or replace function m12.bump_visits()
 returns bigint language sql volatile as $$
-  update app_kv
+  update m12.app_kv
      set value = jsonb_set(value, '{total}',
                  to_jsonb(coalesce((value->>'total')::bigint, 0) + 1)),
          updated_at = now()
@@ -288,7 +297,7 @@ create index if not exists audit_row_idx on audit_log (table_name, row_id, at de
 --   1. GUC `m12.actor`  — khi chạy SQL/rpc trực tiếp (script ETL, psql).
 --   2. Header `x-actor` — khi đi qua PostgREST: PostgREST đổ toàn bộ header
 --      request vào GUC `request.headers`, lớp API luôn gửi kèm email người dùng.
-create or replace function m12_actor()
+create or replace function m12.m12_actor()
 returns text language plpgsql stable as $$
 declare a text;
 begin
@@ -302,21 +311,21 @@ begin
 end $$;
 
 -- Trigger audit dùng chung: ghi diff của mọi cột thay đổi.
-create or replace function m12_audit()
+create or replace function m12.m12_audit()
 returns trigger language plpgsql as $$
 declare
   v_changes jsonb := '{}'::jsonb;
   v_old jsonb;
   v_new jsonb;
   k text;
-  v_actor text := m12_actor();
+  v_actor text := m12.m12_actor();
 begin
   if tg_op = 'INSERT' then
-    insert into audit_log(actor, action, table_name, row_id, changes)
+    insert into m12.audit_log(actor, action, table_name, row_id, changes)
     values (v_actor, 'insert', tg_table_name, (to_jsonb(new)->>'id'), to_jsonb(new));
     return new;
   elsif tg_op = 'DELETE' then
-    insert into audit_log(actor, action, table_name, row_id, changes)
+    insert into m12.audit_log(actor, action, table_name, row_id, changes)
     values (v_actor, 'delete', tg_table_name, (to_jsonb(old)->>'id'), to_jsonb(old));
     return old;
   else
@@ -328,17 +337,17 @@ begin
       end if;
     end loop;
     if v_changes <> '{}'::jsonb then
-      insert into audit_log(actor, action, table_name, row_id, changes)
+      insert into m12.audit_log(actor, action, table_name, row_id, changes)
       values (v_actor, 'update', tg_table_name, (v_new->>'id'), v_changes);
     end if;
     return new;
   end if;
 end $$;
 
-create trigger routes_audit          after insert or update or delete on routes           for each row execute function m12_audit();
-create trigger stops_audit           after insert or update or delete on stops            for each row execute function m12_audit();
-create trigger tc_trips_audit        after insert or update or delete on tc_trips         for each row execute function m12_audit();
-create trigger xin_tc_audit          after insert or update or delete on xin_tang_cuong   for each row execute function m12_audit();
-create trigger dieu_chinh_ncc_audit  after insert or update or delete on dieu_chinh_ncc   for each row execute function m12_audit();
-create trigger accounts_audit        after insert or update or delete on accounts         for each row execute function m12_audit();
-create trigger suppliers_audit       after insert or update or delete on suppliers        for each row execute function m12_audit();
+create trigger routes_audit          after insert or update or delete on routes           for each row execute function m12.m12_audit();
+create trigger stops_audit           after insert or update or delete on stops            for each row execute function m12.m12_audit();
+create trigger tc_trips_audit        after insert or update or delete on tc_trips         for each row execute function m12.m12_audit();
+create trigger xin_tc_audit          after insert or update or delete on xin_tang_cuong   for each row execute function m12.m12_audit();
+create trigger dieu_chinh_ncc_audit  after insert or update or delete on dieu_chinh_ncc   for each row execute function m12.m12_audit();
+create trigger accounts_audit        after insert or update or delete on accounts         for each row execute function m12.m12_audit();
+create trigger suppliers_audit       after insert or update or delete on suppliers        for each row execute function m12.m12_audit();

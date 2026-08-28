@@ -16,6 +16,8 @@
 
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Dữ liệu M12 nằm trong schema riêng (dùng chung project Supabase với hệ thống khác).
+const SB_SCHEMA = process.env.SUPABASE_SCHEMA || "m12";
 const DRY = process.argv.includes("--dry");
 const ONLY = (process.argv.find((a) => a.startsWith("--only=")) || "").split("=")[1] || "";
 const ACTOR = process.env.IMPORT_ACTOR || "import-script";
@@ -119,6 +121,7 @@ async function sbWrite(table, rows, onConflict) {
       headers: {
         apikey: SB_KEY, authorization: "Bearer " + SB_KEY,
         "content-type": "application/json",
+        "content-profile": SB_SCHEMA,   // ghi -> Content-Profile
         "x-actor": ACTOR,
         prefer: onConflict ? "resolution=merge-duplicates,return=minimal" : "return=minimal",
       },
@@ -135,7 +138,7 @@ async function sbWrite(table, rows, onConflict) {
 async function sbSelect(table, query) {
   if (DRY) return [];
   const r = await fetch(SB_URL + "/rest/v1/" + table + "?" + query, {
-    headers: { apikey: SB_KEY, authorization: "Bearer " + SB_KEY },
+    headers: { apikey: SB_KEY, authorization: "Bearer " + SB_KEY, "accept-profile": SB_SCHEMA },
   });
   if (!r.ok) throw new Error(`đọc ${table} lỗi ${r.status}`);
   return r.json();
@@ -325,7 +328,10 @@ async function importRoutes() {
       for (const rid of idByCode.values()) {
         await fetch(`${SB_URL}/rest/v1/stops?route_id=eq.${rid}`, {
           method: "DELETE",
-          headers: { apikey: SB_KEY, authorization: "Bearer " + SB_KEY, "x-actor": ACTOR },
+          headers: {
+            apikey: SB_KEY, authorization: "Bearer " + SB_KEY,
+            "content-profile": SB_SCHEMA, "x-actor": ACTOR,
+          },
         });
       }
       await sbWrite("stops", stopRows);
