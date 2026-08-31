@@ -40,7 +40,7 @@ begin
     'regions','warehouses','warehouse_aliases','suppliers','routes','stops',
     'loai_hinh_values','vehicles','tc_trips','tc_events','xin_tang_cuong',
     'dieu_chinh_ncc','tlld_daily','san_luong_bc','san_luong_kho','fc_daily',
-    'gsvt_roster','roles','accounts','role_permissions','login_otp','login_fails',
+    'gsvt_roster','roles','accounts','role_permissions','perm_modules','login_otp','login_fails',
     'user_activity','qa_threads','qa_messages','knowledge','ai_context_sources',
     'ai_daily','overview_snapshots','reports','app_secrets','app_kv','audit_log'
   ] loop
@@ -64,6 +64,19 @@ begin
       execute format('alter default privileges in schema m12 revoke all on tables from %I', r);
     end if;
   end loop;
+end $$;
+
+-- CHỐT CHẶN: danh sách bảng ở trên là thủ công nên rất dễ quên khi thêm bảng mới
+-- (đã xảy ra thật: bảng `perm_modules` thêm sau bị sót, chạy trên Supabase mới lộ ra).
+-- Khối này quét LẠI toàn schema và báo lỗi ngay nếu còn bảng nào chưa bật RLS.
+do $$
+declare thieu text;
+begin
+  select string_agg(tablename, ', ') into thieu
+    from pg_tables where schemaname = 'm12' and not rowsecurity;
+  if thieu is not null then
+    raise exception 'Còn bảng CHƯA bật RLS trong schema m12: %', thieu;
+  end if;
 end $$;
 
 -- app_secrets: ngay cả service_role cũng chỉ nên đọc qua lớp API. Ghi log mọi lần đổi khoá.
