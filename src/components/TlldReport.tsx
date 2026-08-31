@@ -24,7 +24,7 @@ interface Bar { key: string; val: number | null; label: string; weekend: boolean
 
 /** Màu nền theo ngưỡng lấp đầy. */
 const baseColor = (v: number | null) =>
-  v == null ? "#9aa7b4" : v >= 0.85 ? "#1faa59" : v >= 0.6 ? "#f0a020" : "#e23b3b";
+  v == null ? "var(--text-faint)" : v >= 0.85 ? "var(--color-success)" : v >= 0.6 ? "var(--color-warning)" : "var(--color-danger)";
 
 /** Pha sáng (amt>0) / tối (amt<0) một màu hex -> rgb() để tạo mặt 3D. */
 function shade(hex: string, amt: number): string {
@@ -73,14 +73,14 @@ function LongBars({ bars }: { bars: LB[] }) {
     <div className="sl-chart-scroll">
       <svg className="sl-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={n > 14 ? { minWidth: W } : undefined}>
         {[0.6, 0.85, 1].filter((t) => t <= yMax).map((t, i) => (
-          <line key={i} x1={padL} y1={yOf(t)} x2={W - padR} y2={yOf(t)} stroke={t === 0.85 ? "#cfe9da" : t === 0.6 ? "#fbe7c6" : "#eef1f5"} strokeDasharray="4 4" />
+          <line key={i} x1={padL} y1={yOf(t)} x2={W - padR} y2={yOf(t)} stroke={t === 0.85 ? "var(--success-soft)" : t === 0.6 ? "var(--warning-soft)" : "var(--surface-sunken)"} strokeDasharray="4 4" />
         ))}
         {bars.map((b, i) => {
           const x = padL + i * slot + (slot - bw) / 2;
           const v = b.val ?? 0, y = yOf(v), h = Math.max(0, padT + ch - y);
           return (
             <g key={b.key}>
-              {b.weekend && <rect x={padL + i * slot} y={padT} width={slot} height={ch} fill="rgba(22,104,199,0.12)" />}
+              {b.weekend && <rect x={padL + i * slot} y={padT} width={slot} height={ch} fill="rgba(0,161,154,0.12)" />}
               {b.val != null && (
                 <rect x={x} y={y} width={bw} height={h} rx={2.5} fill={baseColor(b.val)}>
                   <title>{`${b.label}${b.sub ? " (" + b.sub + ")" : ""}: ${pct(b.val)} · ${b.n} tuyến${b.running ? " · đang chạy" : ""}`}</title>
@@ -90,24 +90,24 @@ function LongBars({ bars }: { bars: LB[] }) {
                 <text x={x + bw / 2} y={y - 5} textAnchor="middle" className="sl-barval" style={{ fontSize: valFont }}>{valText(b.val)}</text>
               )}
               {i % labelEvery === 0 && (
-                <text x={x + bw / 2} y={H - padB + 15} textAnchor="middle" className="sl-xlb" style={{ fontSize: dayFont, ...(b.weekend ? { fill: "#1356a8", fontWeight: 800 } : {}) }}>{b.label}</text>
+                <text x={x + bw / 2} y={H - padB + 15} textAnchor="middle" className="sl-xlb" style={{ fontSize: dayFont, ...(b.weekend ? { fill: "var(--chart-2)", fontWeight: 800 } : {}) }}>{b.label}</text>
               )}
             </g>
           );
         })}
         {meanVal != null && (
           <g>
-            <line x1={padL} y1={yOf(meanVal)} x2={W - padR} y2={yOf(meanVal)} stroke="#6b3df0" strokeWidth={1.6} strokeDasharray="6 3" opacity={0.85}>
+            <line x1={padL} y1={yOf(meanVal)} x2={W - padR} y2={yOf(meanVal)} stroke="var(--chart-3)" strokeWidth={1.6} strokeDasharray="6 3" opacity={0.85}>
               <title>{`TB các cột đang xem: ${pct(meanVal)}`}</title>
             </line>
             {/* Nhãn TB đặt CỐ ĐỊNH ở góc trên-trái, không bám đúng độ cao đường TB — đặt sát lề phải
                 sẽ đè lên số của cột cuối (cột hay được chú ý nhất), rõ nhất khi nhiều cột (vd 60 ngày)
                 dồn nhãn sát mép phải. Có nền trắng mờ phía sau để luôn đọc được. */}
-            <rect x={padL} y={padT - 2} width={56} height={16} rx={4} fill="#fff" opacity={0.85} />
-            <text x={padL + 4} y={padT + 9} textAnchor="start" fontSize={10.5} fontWeight={800} fill="#6b3df0">TB {pct(meanVal)}</text>
+            <rect x={padL} y={padT - 2} width={56} height={16} rx={4} fill="var(--surface-card)" opacity={0.85} />
+            <text x={padL + 4} y={padT + 9} textAnchor="start" fontSize={10.5} fontWeight={800} fill="var(--chart-3)">TB {pct(meanVal)}</text>
           </g>
         )}
-        <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="#cdd6e0" />
+        <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="var(--chart-axis)" />
       </svg>
     </div>
   );
@@ -361,7 +361,7 @@ export function TlldReport({
           <svg key={chartKey} className="sl-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={mode !== "7d" ? { minWidth: W } : undefined}>
             {ticks.map((t, i) => (
               <g key={i}>
-                <line x1={padL} y1={yOf(t)} x2={W - padR} y2={yOf(t)} stroke={t === 0.85 ? "#cfe9da" : t === 0.6 ? "#fbe7c6" : "#eef1f5"} strokeDasharray={t === 0.85 || t === 0.5 ? "4 4" : undefined} />
+                <line x1={padL} y1={yOf(t)} x2={W - padR} y2={yOf(t)} stroke={t === 0.85 ? "var(--success-soft)" : t === 0.6 ? "var(--warning-soft)" : "var(--surface-sunken)"} strokeDasharray={t === 0.85 || t === 0.5 ? "4 4" : undefined} />
                 <text x={padL - 7} y={yOf(t) + 4} textAnchor="end" className="sl-axis">{Math.round(t * 100)}%</text>
               </g>
             ))}
@@ -375,7 +375,7 @@ export function TlldReport({
               const x2 = x + barW;
               return (
                 <g key={p.key}>
-                  {p.weekend && <rect x={padL + i * slot} y={padT} width={slot} height={chartH} rx={4} fill="rgba(22,104,199,0.15)" />}
+                  {p.weekend && <rect x={padL + i * slot} y={padT} width={slot} height={chartH} rx={4} fill="rgba(0,161,154,0.15)" />}
                   <g className="sl-bar3d fx-pop" style={{ animationDelay: i * 0.08 + "s" }}>
                     <polygon points={`${x2},${y} ${x2 + d},${y - d} ${x2 + d},${y - d + h} ${x2},${y + h}`} fill={shade(base, -0.28)} />
                     <polygon points={`${x},${y} ${x + d},${y - d} ${x2 + d},${y - d} ${x2},${y}`} fill={shade(base, 0.3)} />
@@ -383,11 +383,11 @@ export function TlldReport({
                     <title>{p.tip}</title>
                   </g>
                   {h > 0 && <text className="sl-barval" style={{ animationDelay: i * 0.08 + 0.4 + "s" }} x={x + barW / 2 + d / 2} y={y - d - 6} textAnchor="middle">{pct(p.val)}</text>}
-                  <text x={x + barW / 2} y={H - padB + 16} textAnchor="middle" className="sl-xlb" style={mode !== "7d" ? { fontSize: 11.5, ...(p.weekend ? { fill: "#1356a8", fontWeight: 800 } : {}) } : (p.weekend ? { fill: "#1356a8", fontWeight: 800 } : undefined)}>{p.label}</text>
+                  <text x={x + barW / 2} y={H - padB + 16} textAnchor="middle" className="sl-xlb" style={mode !== "7d" ? { fontSize: 11.5, ...(p.weekend ? { fill: "var(--chart-2)", fontWeight: 800 } : {}) } : (p.weekend ? { fill: "var(--chart-2)", fontWeight: 800 } : undefined)}>{p.label}</text>
                 </g>
               );
             })}
-            <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="#cdd6e0" />
+            <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="var(--chart-axis)" />
           </svg>
         </div>
 

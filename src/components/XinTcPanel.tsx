@@ -87,7 +87,7 @@ function DayChart({ series }: { series: DayBar[] }) {
           const we = isWeekendISO(b.key); // T7/CN -> dải nền xanh nước biển
           return (
             <div key={b.key} title={`Ngày ${b.label}: ${b.total} lượt · ${b.coXe} có xe · ${b.khongXe} không xe${we ? " · CUỐI TUẦN" : ""}`}
-              style={{ flex: "1 0 auto", minWidth: 12, maxWidth: 26, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%", position: "relative", background: we ? "rgba(22,104,199,0.16)" : undefined, borderRadius: we ? 5 : undefined }}>
+              style={{ flex: "1 0 auto", minWidth: 12, maxWidth: 26, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%", position: "relative", background: we ? "rgba(0,161,154,0.16)" : undefined, borderRadius: we ? 5 : undefined }}>
               {isPeak && <div style={{ position: "absolute", top: -16, left: 0, right: 0, textAlign: "center", fontSize: 11.5, fontWeight: 800, color: "var(--orange)" }}>{b.total}</div>}
               <div style={{ borderRadius: "4px 4px 0 0", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: isPeak ? "0 0 0 2px var(--orange)" : undefined }}>
                 {other > 0 && <div style={{ height: h(other), background: "var(--muted)", opacity: 0.3 }} />}
@@ -104,7 +104,7 @@ function DayChart({ series }: { series: DayBar[] }) {
           const we = isWeekendISO(b.key); // T7/CN -> đỏ đậm
           return (
             <div key={b.key} title={we ? "Cuối tuần (T7/CN)" : undefined}
-              style={{ flex: "1 0 auto", minWidth: 12, maxWidth: 26, textAlign: "center", fontSize: 10, padding: "1px 0", borderRadius: 4, fontWeight: isToday || we ? 800 : 400, color: isToday || we ? "#fff" : "var(--muted)", background: isToday ? "var(--orange)" : we ? "#1668c7" : "transparent" }}>
+              style={{ flex: "1 0 auto", minWidth: 12, maxWidth: 26, textAlign: "center", fontSize: 10, padding: "1px 0", borderRadius: 4, fontWeight: isToday || we ? 800 : 400, color: isToday || we ? "var(--text-onaccent)" : "var(--muted)", background: isToday ? "var(--orange)" : we ? "var(--chart-2)" : "transparent" }}>
               {b.label}
             </div>
           );
@@ -336,9 +336,9 @@ export function XinTcPanel() {
           </div>
         </div>
         <div style={{ fontSize: 13, color: "var(--muted)", display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 4 }}>
-          <span><b style={{ color: "#2f8f4e" }}>▮</b> Số lượt xin/ngày (cột)</span>
-          <span><b style={{ color: "#f15a24" }}>―●</b> EMA — xu hướng lượt xin (đường mượt)</span>
-          <span>Tổng kỳ: <b>{trendStats.total}</b> lượt · đáp ứng <b style={{ color: "#2f8f4e" }}>{pct(trendStats.rate)}</b></span>
+          <span><b style={{ color: "var(--color-success)" }}>▮</b> Số lượt xin/ngày (cột)</span>
+          <span><b style={{ color: "var(--chart-1)" }}>―●</b> EMA — xu hướng lượt xin (đường mượt)</span>
+          <span>Tổng kỳ: <b>{trendStats.total}</b> lượt · đáp ứng <b style={{ color: "var(--color-success)" }}>{pct(trendStats.rate)}</b></span>
         </div>
         <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 2, fontStyle: "italic" }}>
           ℹ️ Đường cam = EMA (trung bình động luỹ thừa) của số lượt xin — như đường MA chứng khoán: cột trên đường = ngày cao hơn xu hướng, cột dưới = thấp hơn.
@@ -377,7 +377,7 @@ export function XinTcPanel() {
                 items={[
                   { label: "Có xe", value: st.coXe, color: "var(--green)" },
                   { label: "Không xe", value: st.khongXe, color: "var(--red)" },
-                  ...(other > 0 ? [{ label: "Khác/hủy", value: other, color: "#c2cbd6" }] : []),
+                  ...(other > 0 ? [{ label: "Khác/hủy", value: other, color: "var(--chart-other)" }] : []),
                 ]}
                 center={pct(st.rate)}
                 centerSub="đáp ứng"

@@ -8,7 +8,7 @@ const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 /** 1 ô THỨ trong lưới lịch đề xuất: xanh=cố định · cam=linh động · xám=OFF. */
 function DowChip({ p }: { p: DowPattern }) {
   const bg = p.status === "fixed" ? "var(--green)" : p.status === "off" ? "var(--line-2)" : "var(--orange)";
-  const fg = p.status === "off" ? "var(--muted)" : "#fff";
+  const fg = p.status === "off" ? "var(--muted)" : "var(--text-onaccent)";
   const txt = p.status === "off" ? "OFF" : p.label;
   const tip = `${p.label}: xin ${Math.round(p.freq * 100)}% số tuần hoạt động`
     + (p.reqCount ? ` · ${p.reqCount} lượt · TB ${p.avgXe.toFixed(1)} xe/lần` : "")

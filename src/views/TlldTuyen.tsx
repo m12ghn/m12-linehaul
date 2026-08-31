@@ -392,7 +392,7 @@ export function TlldTuyen({
             .tlld-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
             @media (max-width:760px){.tlld-cols{grid-template-columns:1fr}}
             .tlld-col{display:flex;flex-direction:column;gap:8px;min-width:0}
-            .tlld-col-h{position:sticky;top:0;z-index:2;background:var(--bg,#f1f5f9);padding:7px 9px;border-radius:9px;border:1px solid rgba(0,0,0,.06)}
+            .tlld-col-h{position:sticky;top:0;z-index:2;background:var(--bg,var(--surface-sunken));padding:7px 9px;border-radius:9px;border:1px solid rgba(0,0,0,.06)}
             .tlld-col-h .t{font-weight:800;font-size:13px}
             .tlld-col-h .c{font-weight:600;color:var(--muted)}
             .tlld-col-h .h{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.35}

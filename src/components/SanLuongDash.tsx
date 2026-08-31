@@ -13,18 +13,18 @@ import { exportSanLuong } from "../lib/exportExcel";
 import { isWeekendISO } from "../lib/normalize";
 
 const LOAI_COLOR: Record<string, string> = {
-  Normal: "#1668c7",
-  Freight: "#f15a24",
-  Bulky: "#1faa59",
+  Normal: "var(--chart-2)",
+  Freight: "var(--chart-1)",
+  Bulky: "var(--color-success)",
 };
 
 // Bộ màu 3D cho cột: mặt trước / mặt trên (sáng) / mặt bên (tối).
 type Face = { front: string; top: string; side: string };
 const C3D: Record<"up" | "down" | "first" | "flat", Face> = {
-  up: { front: "#1faa59", top: "#54c98a", side: "#157d42" },
-  down: { front: "#e23b3b", top: "#ef6e6e", side: "#b02a2a" },
-  first: { front: "#1668c7", top: "#4f93da", side: "#0f4d96" },
-  flat: { front: "#9aa7b4", top: "#bcc6cf", side: "#76828f" },
+  up: { front: "var(--color-success)", top: "var(--color-success)", side: "var(--color-success)" },
+  down: { front: "var(--color-danger)", top: "var(--color-danger)", side: "var(--color-danger)" },
+  first: { front: "var(--chart-2)", top: "var(--chart-6)", side: "var(--chart-2)" },
+  flat: { front: "var(--text-faint)", top: "var(--chart-axis)", side: "var(--text-muted)" },
 };
 
 const fmt = (n: number) => Math.round(n).toLocaleString("vi-VN");
@@ -192,7 +192,7 @@ export function SanLuongDash({ sheetName, title, tlld }: { sheetName: string; ti
                   {/* lưới + nhãn trục Y */}
                   {ticks.map((t, i) => (
                     <g key={i}>
-                      <line x1={padL} y1={yOf(t)} x2={W - padR} y2={yOf(t)} stroke="#eef1f5" />
+                      <line x1={padL} y1={yOf(t)} x2={W - padR} y2={yOf(t)} stroke="var(--surface-sunken)" />
                       <text x={padL - 8} y={yOf(t) + 4} textAnchor="end" className="sl-axis">{short(t)}</text>
                     </g>
                   ))}
@@ -209,7 +209,7 @@ export function SanLuongDash({ sheetName, title, tlld }: { sheetName: string; ti
                     const we = gran === "day" && isWeekendISO(b.key); // T7/CN -> nhãn đỏ đậm
                     return (
                       <g key={b.key}>
-                        {we && <rect x={padL + i * slot} y={padT} width={slot} height={chartH} rx={4} fill="rgba(22,104,199,0.15)" />}
+                        {we && <rect x={padL + i * slot} y={padT} width={slot} height={chartH} rx={4} fill="rgba(0,161,154,0.15)" />}
                         <g className="sl-bar3d fx-rise" style={{ animationDelay: i * 0.09 + "s" }}>
                           {/* mặt bên (phải, tối) */}
                           <polygon points={`${x2},${y} ${x2 + d},${y - d} ${x2 + d},${y - d + h} ${x2},${y + h}`} fill={c.side} />
@@ -227,11 +227,11 @@ export function SanLuongDash({ sheetName, title, tlld }: { sheetName: string; ti
                             {pctChg >= 0 ? "▲" : "▼"}{Math.abs(pctChg).toFixed(0)}%
                           </text>
                         )}
-                        <text x={x + barW / 2} y={H - padB + 18} textAnchor="middle" className="sl-xlb" style={we ? { fill: "#1356a8", fontWeight: 800 } : undefined}>{b.label}</text>
+                        <text x={x + barW / 2} y={H - padB + 18} textAnchor="middle" className="sl-xlb" style={we ? { fill: "var(--chart-2)", fontWeight: 800 } : undefined}>{b.label}</text>
                       </g>
                     );
                   })}
-                  <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="#cdd6e0" />
+                  <line x1={padL} y1={padT + chartH} x2={W - padR} y2={padT + chartH} stroke="var(--chart-axis)" />
                 </svg>
               </div>
             )}
@@ -245,14 +245,14 @@ export function SanLuongDash({ sheetName, title, tlld }: { sheetName: string; ti
                 {loais.filter((l) => loaiTotals[l]).map((l) => {
                   const v = loaiTotals[l] || 0;
                   return (
-                    <div className="sl-loaibar-seg" key={l} style={{ width: (v / loaiSum) * 100 + "%", background: LOAI_COLOR[l] || "#888" }}
+                    <div className="sl-loaibar-seg" key={l} style={{ width: (v / loaiSum) * 100 + "%", background: LOAI_COLOR[l] || "var(--text-muted)" }}
                       title={`${l}: ${fmt(v)} ${unit} (${((v / loaiSum) * 100).toFixed(1)}%)`} />
                   );
                 })}
               </div>
               <div className="sl-loaileg">
                 {loais.filter((l) => loaiTotals[l]).map((l) => (
-                  <span key={l}><i style={{ background: LOAI_COLOR[l] || "#888" }} />{l}: <b>{fmt(loaiTotals[l] || 0)}</b> {unit} ({((loaiTotals[l] / loaiSum) * 100).toFixed(0)}%)</span>
+                  <span key={l}><i style={{ background: LOAI_COLOR[l] || "var(--text-muted)" }} />{l}: <b>{fmt(loaiTotals[l] || 0)}</b> {unit} ({((loaiTotals[l] / loaiSum) * 100).toFixed(0)}%)</span>
                 ))}
               </div>
             </div>

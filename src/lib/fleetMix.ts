@@ -30,7 +30,7 @@ export const TON_SHORT: Record<TonKey, string> = { van: "Van", t19: "1.9T", t50:
 export const TON_ORDER: TonKey[] = ["van", "t19", "t50", "t80"];
 /** Màu THEO TẢI TRỌNG dùng chung mọi chart trong Plan Event (trước đây khai riêng trong
  *  FleetCharts.tsx) — dùng lại để 1 tải trọng LUÔN cùng 1 màu xuyên suốt các biểu đồ. */
-export const TON_COLOR: Record<TonKey, string> = { van: "#1668c7", t19: "#f15a24", t50: "#1faa59", t80: "#e23b3b" };
+export const TON_COLOR: Record<TonKey, string> = { van: "var(--chart-2)", t19: "var(--chart-1)", t50: "var(--color-success)", t80: "var(--color-danger)" };
 
 /** Phân loại chuỗi tải trọng về 4 nhóm Van / 1.900 / 5.000 / 8.000. */
 export function tonBucket(raw: string): TonKey | null {

@@ -253,9 +253,9 @@ export function AssistantChat({
         )}
       </div>
       <style>{`
-        .as-thinking{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#1356a8;background:linear-gradient(90deg,rgba(22,104,199,.10),rgba(22,104,199,.20),rgba(22,104,199,.10));background-size:200% 100%;animation:asShimmer 1.3s linear infinite}
+        .as-thinking{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--chart-2);background:linear-gradient(90deg,rgba(0,161,154,.10),rgba(0,161,154,.20),rgba(0,161,154,.10));background-size:200% 100%;animation:asShimmer 1.3s linear infinite}
         @keyframes asShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-        .as-think-spin{width:13px;height:13px;border:2px solid rgba(22,104,199,.35);border-top-color:#1668c7;border-radius:50%;display:inline-block;animation:asSpin .7s linear infinite}
+        .as-think-spin{width:13px;height:13px;border:2px solid rgba(0,161,154,.35);border-top-color:var(--chart-2);border-radius:50%;display:inline-block;animation:asSpin .7s linear infinite}
         @keyframes asSpin{to{transform:rotate(360deg)}}
         .as-dots i{animation:asBlink 1.2s infinite both;font-weight:800}
         .as-dots i:nth-child(2){animation-delay:.2s}

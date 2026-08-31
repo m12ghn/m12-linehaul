@@ -110,7 +110,7 @@ export function TcEventEval() {
         const rv = st.rate >= 0.95 ? "TỐT 🟢" : st.rate >= 0.85 ? "KHÁ 🟠" : "THẤP 🔴";
         const psPct = st.totalXe ? Math.round((psTotal / st.totalXe) * 100) : 0;
         return (
-          <div style={{ fontSize: 14, lineHeight: 1.65, color: "#3a4753", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px", marginTop: 10 }}>
+          <div style={{ fontSize: 14, lineHeight: 1.65, color: "var(--text-body)", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px", marginTop: 10 }}>
             <b>🤖 Nhận xét (tự động):</b> Đáp ứng chung <b>{pct(st.rate)}</b> — {rv} ({st.okXe}/{st.totalXe} xe).{" "}
             {weak.length > 0 && <>NCC cần rút kinh nghiệm: {weak.map((n) => `${n.ncc} ${pct(n.rate)}`).join(", ")}. </>}
             {good > 0 && <>{good} NCC đáp ứng đủ 100%. </>}

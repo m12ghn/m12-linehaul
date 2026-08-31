@@ -9,8 +9,8 @@
 import type { DayBar } from "../lib/xinTangCuong";
 import { isWeekendISO } from "../lib/normalize";
 
-const GREEN = "#2f8f4e";
-const EMA_C = "#f15a24";
+const GREEN = "var(--color-success)";
+const EMA_C = "var(--chart-1)";
 
 export function TrendChart({ series, showRateLabels }: { series: DayBar[]; showRateLabels: boolean }) {
   const n = series.length;
@@ -39,7 +39,7 @@ export function TrendChart({ series, showRateLabels }: { series: DayBar[]; showR
         {/* dải nền cuối tuần */}
         {series.map((b, i) =>
           isWeekendISO(b.key) ? (
-            <rect key={"we" + i} x={x(i) - stepX / 2} y={padTop - 4} width={stepX} height={PH + 8} fill="rgba(22,104,199,0.07)" />
+            <rect key={"we" + i} x={x(i) - stepX / 2} y={padTop - 4} width={stepX} height={PH + 8} fill="rgba(0,161,154,0.07)" />
           ) : null
         )}
         {/* lưới + trục TRÁI (lượt) */}
@@ -69,7 +69,7 @@ export function TrendChart({ series, showRateLabels }: { series: DayBar[]; showR
         {/* ĐƯỜNG EMA số lượt xin (xu hướng) */}
         {n > 1 && <polyline points={emaLine} fill="none" stroke={EMA_C} strokeWidth={2.5} strokeLinejoin="round" />}
         {series.map((_, i) => (
-          <circle key={"e" + i} cx={x(i)} cy={y(ema[i])} r={2.4} fill="#fff" stroke={EMA_C} strokeWidth={1.6} />
+          <circle key={"e" + i} cx={x(i)} cy={y(ema[i])} r={2.4} fill="var(--surface-card)" stroke={EMA_C} strokeWidth={1.6} />
         ))}
         {/* nhãn EMA ở điểm cuối (giá trị xu hướng hiện tại) */}
         <text x={x(n - 1) + 4} y={y(ema[n - 1]) + 3} fontSize={9} fontWeight={800} fill={EMA_C}>EMA{P}</text>
@@ -81,7 +81,7 @@ export function TrendChart({ series, showRateLabels }: { series: DayBar[]; showR
         {series.map((b, i) => {
           const we = isWeekendISO(b.key);
           return (
-            <text key={"x" + i} x={x(i)} y={H - 10} textAnchor="middle" fontSize={9} fontWeight={we ? 800 : 400} fill={we ? "#1668c7" : "var(--muted)"}>
+            <text key={"x" + i} x={x(i)} y={H - 10} textAnchor="middle" fontSize={9} fontWeight={we ? 800 : 400} fill={we ? "var(--chart-2)" : "var(--muted)"}>
               {b.label}
             </text>
           );
