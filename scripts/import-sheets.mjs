@@ -5,8 +5,7 @@
    Cách chạy:
      export SUPABASE_URL="https://xxxx.supabase.co"
      export SUPABASE_SERVICE_ROLE_KEY="..."
-     export DATA_API_TOKEN="..."                                  # bước "warehouses" (Data API)
-     export GSHEETS_SA_B64="$(base64 -w0 service-account.json)"   # hoặc GOOGLE_API_KEY — bước routes/vehicles/sanluong
+     export DATA_API_TOKEN="..."   # chỉ bước "warehouses" cần (Data API)
      node scripts/import-sheets.mjs                # nạp tất cả
      node scripts/import-sheets.mjs --only=routes  # chỉ 1 phần
      node scripts/import-sheets.mjs --dry          # đọc & in thống kê, KHÔNG ghi
@@ -14,10 +13,18 @@
    NGUYÊN TẮC: chạy lại nhiều lần vẫn an toàn (idempotent) — dùng upsert theo
    khoá tự nhiên, không nhân bản dữ liệu. Cứ chạy thử `--dry` trước.
 
-   01/09/2026: bước "warehouses" đổi nguồn Google Sheet -> GHN Data API
-   (bảng iceberg.dwh.dim_warehouse, có sẵn warehouse_id/warehouse_name/lat/long,
-   không cần dò khớp tên nữa). Cần DATA_API_TOKEN (lấy token đang set trên
-   Vercel → Settings → Environment Variables, cùng token dùng cho api/cron/tlld.ts).
+   01/09/2026:
+   - Bước "warehouses" đổi nguồn Google Sheet -> GHN Data API (bảng
+     iceberg.dwh.dim_warehouse, có sẵn warehouse_id/warehouse_name/lat/long,
+     không cần dò khớp tên nữa). Cần DATA_API_TOKEN (lấy token đang set trên
+     Vercel → Settings → Environment Variables, cùng token dùng cho
+     api/cron/tlld.ts).
+   - Các bước "routes"/"vehicles"/"sanluong" đổi cách đọc Sheet: bỏ Sheets
+     API v4 (JWT service-account hoặc GOOGLE_API_KEY), đọc thẳng CSV công
+     khai qua gviz/export — ĐÚNG 2 nguồn dự phòng #2/#3 mà frontend
+     (src/config.ts csvSources()) đã và đang dùng thật cho các sheet này,
+     nên không cần xin thêm key/service-account nào cả. Không còn đọc
+     GSHEETS_SA_B64/GOOGLE_API_KEY.
    ============================================================ */
 
 const SB_URL = process.env.SUPABASE_URL;
@@ -122,61 +129,59 @@ async function dataApiQuery(sql) {
   return gom.map((r) => (Array.isArray(r) ? Object.fromEntries(cols.map((c, i) => [c, r[i]])) : r));
 }
 
-// ---------- Google Sheets: lấy access token từ service account ----------
-let cachedToken = null;
-async function googleToken() {
-  if (cachedToken && cachedToken.exp > Date.now() + 60_000) return cachedToken.token;
-  const b64 = process.env.GSHEETS_SA_B64;
-  if (!b64) return null;
-  const sa = JSON.parse(Buffer.from(b64, "base64").toString("utf8"));
-  const { createSign } = await import("node:crypto");
-  const iat = Math.floor(Date.now() / 1000);
-  const b64u = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
-  const input = b64u({ alg: "RS256", typ: "JWT" }) + "." + b64u({
-    iss: sa.client_email,
-    scope: "https://www.googleapis.com/auth/spreadsheets.readonly",
-    aud: "https://oauth2.googleapis.com/token", iat, exp: iat + 3600,
-  });
-  const sig = createSign("RSA-SHA256").update(input).end().sign(sa.private_key).toString("base64url");
-  const r = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: "grant_type=" + encodeURIComponent("urn:ietf:params:oauth:grant-type:jwt-bearer")
-        + "&assertion=" + encodeURIComponent(input + "." + sig),
-  });
-  if (!r.ok) throw new Error("google_token_failed: " + (await r.text()).slice(0, 200));
-  const d = await r.json();
-  cachedToken = { token: d.access_token, exp: Date.now() + d.expires_in * 1000 };
-  return cachedToken.token;
+// ---------- Google Sheets: đọc CSV công khai (KHÔNG cần API key/service account) ----------
+// 01/09/2026: trước đây gọi Sheets API v4 (JWT service-account hoặc GOOGLE_API_KEY).
+// Đổi sang đọc thẳng 2 nguồn dự phòng #2/#3 mà frontend đã dùng thật cho ĐÚNG các
+// sheet này từ trước tới giờ (xem csvSources()/csvSourcesByName() trong
+// src/config.ts — nguồn #1 ở đó là proxy /api/sheet-v4, chỉ gọi được từ trình
+// duyệt qua domain Vercel nên bỏ qua ở đây). Các sheet đã public dạng "ai có
+// link cũng xem được", nên gviz/export đọc thẳng không cần đăng nhập gì cả.
+
+/* Parser CSV — BẢN SAO của parseCSV() trong src/lib/csv.ts, giữ đồng bộ. */
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let i = 0;
+  let q = false;
+  while (i < text.length) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else q = false;
+      } else field += c;
+    } else {
+      if (c === '"') q = true;
+      else if (c === ",") { row.push(field); field = ""; }
+      else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+      else if (c === "\r") { /* bỏ qua */ }
+      else field += c;
+    }
+    i++;
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((c) => c.trim() !== ""));
 }
 
-/** Tên tab theo gid (Sheets API cần TÊN, không nhận gid). */
-const tabCache = new Map();
-async function tabName(sheetId, gid) {
-  const k = sheetId + ":" + gid;
-  if (tabCache.has(k)) return tabCache.get(k);
-  const token = await googleToken();
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties(sheetId,title)`
-            + (token ? "" : `&key=${process.env.GOOGLE_API_KEY}`);
-  const r = await fetch(url, token ? { headers: { authorization: "Bearer " + token } } : {});
-  if (!r.ok) throw new Error("meta_failed " + r.status + " " + (await r.text()).slice(0, 200));
-  const d = await r.json();
-  for (const s of d.sheets || []) tabCache.set(sheetId + ":" + s.properties.sheetId, s.properties.title);
-  return tabCache.get(k);
-}
-
-/** Đọc toàn bộ 1 tab -> mảng 2 chiều chuỗi. */
+/** Đọc toàn bộ 1 tab (theo gid) -> mảng 2 chiều chuỗi, thử gviz rồi export?format=csv. */
 async function readGrid(sheetId, gid) {
-  const title = await tabName(sheetId, gid);
-  if (!title) throw new Error("gid_not_found " + gid);
-  const token = await googleToken();
-  const range = encodeURIComponent(`'${title.replace(/'/g, "''")}'`);
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`
-            + `?valueRenderOption=FORMATTED_VALUE&majorDimension=ROWS`
-            + (token ? "" : `&key=${process.env.GOOGLE_API_KEY}`);
-  const r = await fetch(url, token ? { headers: { authorization: "Bearer " + token } } : {});
-  if (!r.ok) throw new Error("read_failed " + r.status + " " + (await r.text()).slice(0, 200));
-  return (await r.json()).values || [];
+  const nguon = [
+    `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&gid=${gid}`,
+    `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`,
+  ];
+  let loiCuoi = null;
+  for (const url of nguon) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) { loiCuoi = new Error(`http_${r.status}`); continue; }
+      const text = await r.text();
+      // Sheet riêng tư / gid sai -> Google trả trang HTML (đăng nhập/lỗi) thay vì CSV.
+      if (/^\s*<(!doctype|html)/i.test(text)) { loiCuoi = new Error("tra_ve_html_khong_phai_csv"); continue; }
+      return parseCSV(text);
+    } catch (e) { loiCuoi = e; }
+  }
+  throw new Error(`doc_sheet_csv_that_bai id=${sheetId} gid=${gid}: ${loiCuoi?.message || loiCuoi}`);
 }
 
 // ---------- Supabase ----------
