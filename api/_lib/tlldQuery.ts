@@ -294,9 +294,21 @@ export async function layTlld(token: string, tuNgay: string, denNgay: string): P
     throw new Error("data_api_503_thu_lai_4_lan_van_ban");
   };
 
+  // ⚠ SCHEMA CÓ THỂ CHƯA CÓ Ở LỜI GỌI POST.
+  // POST trả về khi query mới RUNNING — lúc đó `schema` thường RỖNG, tên cột chỉ
+  // về ở các batch /next sau. Đọc schema đúng một lần lúc POST là cols = [], rồi
+  // mọi dòng ánh xạ ra object RỖNG, ghi xuống Postgres thành toàn null:
+  //   23502 not-null violation, cột raw = {}   (đã dính thật)
+  // Nên phải cập nhật lại mỗi khi bắt gặp schema không rỗng.
+  let cols: string[] = [];
+  const napCols = (r: any): void => {
+    const s = (r?.schema || []).map((c: any) => (typeof c === "string" ? c : c?.name)).filter(Boolean);
+    if (s.length) cols = s;
+  };
+
   let res = await post();
   const qid: string = res.queryId;
-  const cols: string[] = (res.schema || []).map((c: any) => (typeof c === "string" ? c : c?.name));
+  napCols(res);
   const gom: any[] = [...(res.rows || [])];
 
   let soLanPoll = 0;
@@ -307,13 +319,33 @@ export async function layTlld(token: string, tuNgay: string, denNgay: string): P
     await ngu(dangTinh ? 10_000 : 150);
     soLanPoll++;
     res = await next(qid);
+    napCols(res);
     gom.push(...(res.rows || []));
   }
 
   // API có thể trả mảng theo thứ tự cột, hoặc trả sẵn object — chịu cả hai.
+  const kieuMang = gom.length > 0 && Array.isArray(gom[0]);
+  if (kieuMang && !cols.length) {
+    // Thà dừng có tiếng còn hơn ghi xuống Postgres một đống dòng rỗng rồi mới
+    // vỡ ở ràng buộc not-null, lúc đó nhìn lỗi không đoán ra nguyên nhân.
+    throw new Error(
+      `data_api_khong_co_schema: nhận ${gom.length} dòng kiểu mảng nhưng API không ` +
+      `trả về tên cột nào -> không ánh xạ được. Kiểm tra lại trường "schema" trong phản hồi.`,
+    );
+  }
   const rows = gom.map((r: any) =>
     Array.isArray(r) ? Object.fromEntries(cols.map((c, i) => [c, r[i]])) : r
   ) as TlldRow[];
+
+  // Chốt chặn: mọi dòng phải có ngày và mã chuyến, đó là khoá của bảng. Thiếu
+  // là ánh xạ sai chứ không phải dữ liệu thiếu — dừng ngay, đừng ghi rác.
+  const hong = rows.filter((r) => !r?.ngay || !r?.ma_chuyen).length;
+  if (hong) {
+    throw new Error(
+      `du_lieu_khong_hop_le: ${hong}/${rows.length} dòng thiếu ngay hoặc ma_chuyen. ` +
+      `Tên cột nhận được: ${cols.join(", ") || "(rỗng)"}`,
+    );
+  }
 
   return { rows, quotaConLai, soLanPoll };
 }
