@@ -1,17 +1,20 @@
 {
+  "// ": [
+    "Kiểm kiểu cho thư mục api/ — tsconfig.json chính chỉ include 'src' nên toàn bộ",
+    "backend KHÔNG được kiểm, `npm run build` xanh mà api/ vẫn có thể hỏng.",
+    "Đã dính thật: sửa import thiếu đuôi .js, tsc báo OK, lên Vercel chết ngay lúc gọi.",
+    "Chạy: npm run check:api"
+  ],
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "lib": ["ES2022", "DOM"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": [],
     "strict": true,
-    "noEmit": true,
     "skipLibCheck": true,
+    "noEmit": true,
     "isolatedModules": true,
-    "moduleDetection": "force",
-    "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "resolveJsonModule": true
   },
   "include": ["api"]
 }

@@ -21,8 +21,15 @@
      CRON_SECRET      Vercel tự sinh khi khai báo crons
      DATA_API_TOKEN   token Bearer của Data API — NHẬP TAY trên Vercel
    ============================================================ */
-import { json, select } from "./../_lib/supabase";
-import { layTlld, type TlldRow } from "./../_lib/tlldQuery";
+// ⚠ PHẢI ghi đuôi .js — đây là file DUY NHẤT trong api/ chạy trên Node runtime.
+// Node chạy ESM ("type":"module" trong package.json) bắt buộc đường dẫn có đuôi;
+// còn Edge thì gói mọi thứ vào một bundle nên viết thiếu đuôi vẫn chạy. Các file
+// khác trong api/ đều là Edge nên chúng viết không đuôi — đừng thấy vậy mà bỏ đi.
+// Viết .js chứ không phải .ts vì đây là tên file SAU KHI biên dịch.
+// Bỏ đuôi ra là chết ngay lúc gọi: ERR_MODULE_NOT_FOUND -> FUNCTION_INVOCATION_FAILED
+// (đã dính thật, lần chạy thử đầu tiên).
+import { json, select } from "./../_lib/supabase.js";
+import { layTlld, type TlldRow } from "./../_lib/tlldQuery.js";
 
 // CHẠY TRÊN NODE, KHÔNG PHẢI EDGE — và đây là chỗ dễ vấp:
 // Edge runtime chỉ cho ~25 giây rồi cắt. Một câu Trino quét một ngày mất
