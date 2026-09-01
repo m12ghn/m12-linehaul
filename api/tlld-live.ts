@@ -40,10 +40,44 @@ interface DongChuyen {
   kho_dau: string | null;
 }
 
+interface DiemDung {
+  ngay: string;
+  ma_chuyen: string;
+  thu_tu: number;
+  kho: string | null;
+  kho_truoc_do: string | null;
+  kho_tiep_theo: string | null;
+  loai_tai: string | null;
+  khoiluong_kg: number | null;
+  so_don_hang: number | null;
+  tlld_weight_diem: number | null;
+  tlld_vol_diem: number | null;
+}
+
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "GET") return json({ error: "method_not_allowed" }, 405);
   try {
     const u = new URL(req.url);
+
+    // ?muc=diem&ma_chuyen=... -> CHI TIẾT TỪNG ĐIỂM DỪNG của 1 chuyến (mức thấp nhất, tlld_daily —
+    // xem 0004), khác mặc định bên dưới (view tlld_trip, đã gộp 1 dòng/chuyến). Tải RIÊNG theo yêu
+    // cầu (1 mã chuyến/lần) — 1 chuyến trung bình ~3.3 điểm dừng (đo thật 30/08: 2647 điểm/809
+    // chuyến), tải hết mọi chuyến mọi ngày sẽ nặng gấp nhiều lần không cần thiết. Thêm 01/09/2026
+    // khi rebuild TLLD Tuyến (Sếp yêu cầu góc nhìn "theo điểm dừng" bên cạnh "cả chuyến").
+    const muc = u.searchParams.get("muc");
+    if (muc === "diem") {
+      const maChuyen = (u.searchParams.get("ma_chuyen") || "").trim();
+      if (!maChuyen) return json({ error: "thieu_ma_chuyen" }, 400);
+      const rows = await selectAll<DiemDung>("tlld_daily", {
+        select:
+          "ngay,ma_chuyen,thu_tu,kho,kho_truoc_do,kho_tiep_theo,loai_tai," +
+          "khoiluong_kg,so_don_hang,tlld_weight_diem,tlld_vol_diem",
+        filter: { ma_chuyen: "eq." + maChuyen },
+        order: "thu_tu.asc",
+      });
+      return json({ ok: true, ma_chuyen: maChuyen, so_diem: rows.length, rows });
+    }
+
     const tu = u.searchParams.get("tu");
     const den = u.searchParams.get("den");
     const filter: Record<string, string> = {};

@@ -3,6 +3,7 @@ import { CategoryTabs } from "../components/CategoryTabs";
 import { TlldCard } from "../components/TlldCard";
 import { TlldReport, LongTrend } from "../components/TlldReport";
 import { TlldClusterReport } from "../components/TlldClusterReport";
+import { TlldSucKhoe } from "../components/TlldSucKhoe";
 import { DieuChinhReport } from "../components/DieuChinhReport";
 import { SuggestDrop } from "../components/SuggestDrop";
 import { Collapsible } from "../components/Collapsible";
@@ -243,7 +244,12 @@ export function TlldTuyen({
 
   return (
     <>
-      <div className="kpi-row tlld">
+      {/* SỨC KHOẺ VẬN HÀNH TLLD — TOÀN CỤM (không lọc theo vùng/loại tuyến đang chọn bên dưới),
+          xem src/components/TlldSucKhoe.tsx. Đặt TRÊN CÙNG vì đây là bức tranh tổng trước khi
+          duyệt/tìm từng tuyến ở khung region-scoped phía dưới. */}
+      <TlldSucKhoe index={index} />
+
+      <div className="kpi-row tlld" style={{ marginTop: 16 }}>
         <div className="kpi">
           <div className="lbl">Tuyến có dữ liệu TLLD</div>
           <div className="val orange">{withData.length}</div>

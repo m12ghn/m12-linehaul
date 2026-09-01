@@ -407,6 +407,19 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .tlld-cum-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .tlld-cum-subh { font-size: 14px; font-weight: 800; margin-bottom: 6px; }
 @media (max-width: 640px) { .tlld-cum-head { flex-direction: column; } }
+
+/* ===== TLLD SỨC KHOẺ VẬN HÀNH (khung Tổng Quan mới, TlldSucKhoe.tsx, 01/09) ===== */
+.tq-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+@media (max-width: 900px) { .tq-grid { grid-template-columns: 1fr; } }
+.tq-card { border-left: 4px solid var(--orange); padding: 16px 18px; }
+.tq-card .lbl { font-size: 12.5px; font-weight: 700; color: var(--muted); letter-spacing: .5px; text-transform: uppercase; }
+.tq-card .val { font-size: 28px; font-weight: 800; line-height: 1.1; margin: 6px 0 10px; }
+.tq-cmp-list { display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.tq-cmp-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 12.5px; }
+.tq-cmp-lb { color: var(--muted); white-space: nowrap; }
+.tq-cmp-sub { font-weight: 600; color: var(--muted); font-size: 11.5px; margin-left: 4px; }
+.tq-chuyen-row:hover td { background: var(--accent-soft); }
+.tq-sub { font-size: 14px; font-weight: 800; color: var(--ink); margin-bottom: 8px; }
 .tc-left { flex: 1; min-width: 0; }
 .tc-code { font-size: 16px; font-weight: 800; color: var(--ink); }
 .tc-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
