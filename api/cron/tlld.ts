@@ -18,7 +18,12 @@
 import { json } from "./../_lib/supabase";
 import { layTlld, type TlldRow } from "./../_lib/tlldQuery";
 
-export const config = { runtime: "edge" };
+// CHẠY TRÊN NODE, KHÔNG PHẢI EDGE — và đây là chỗ dễ vấp:
+// Edge runtime chỉ cho ~25 giây rồi cắt. Một câu Trino quét một ngày mất
+// 30–90 giây là bình thường, nên để Edge là lần chạy đầu tiên đã đứt.
+// Các endpoint khác trong dự án để Edge vì chúng chỉ đọc Supabase (vài trăm ms).
+// maxDuration 300 giây là mức gói Vercel Pro cho phép.
+export const config = { runtime: "nodejs", maxDuration: 300 };
 
 /** Ghi theo lô. Lô nhỏ hơn ETL thường (500) vì mỗi dòng TLLD có thêm cột raw. */
 const LO = 300;
