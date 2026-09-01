@@ -37,9 +37,9 @@ export interface TlldRoute {
   days30: number; // số ngày góp vào avg30
   weekendAvg: number | null; // TB lấp đầy các ngày T7/CN (trong 30 ngày)
   weekendDays: number; // số ngày cuối tuần có dữ liệu
-  // TLLD THEO THỂ TÍCH (số đơn) — SONG SONG bộ chỉ số khối lượng ở trên, thêm 01/09 khi rebuild
-  // TLLD Tuyến (Sếp yêu cầu 2 góc nhìn khối lượng/thể tích). Nhẹ hơn bộ khối lượng (không có
-  // rollCur/rollPrev/calCur/calPrev/eventAvg — chưa có nơi nào cần so kỳ chi tiết theo thể tích).
+  // TLLD THEO VOLUME (số đơn) — SONG SONG bộ chỉ số khối lượng ở trên, thêm 01/09 khi rebuild
+  // TLLD Tuyến (Sếp yêu cầu 2 góc nhìn khối lượng/Volume). Nhẹ hơn bộ khối lượng (không có
+  // rollCur/rollPrev/calCur/calPrev/eventAvg — chưa có nơi nào cần so kỳ chi tiết theo Volume).
   tlldVol: {
     n1: number | null; avg7: number | null; avg14: number | null; avg30: number | null;
     weekendAvg: number | null;
@@ -110,7 +110,7 @@ export interface TlldChuyen {
   bienSo: string; // biển số
   partner: string; // GHN / NCC
   loaiTai: string; // Nhập / Xuất
-  tlldVol: number | null; // lấp đầy theo thể tích
+  tlldVol: number | null; // lấp đầy theo Volume
   tlldWeight: number | null; // lấp đầy theo khối lượng
   soDon: string; // số đơn hàng
   kg: string; // khối lượng (kg)
@@ -118,7 +118,7 @@ export interface TlldChuyen {
 
 export interface TlldClusterDay {
   weightAvg: number | null; // TB lấp đầy khối lượng TOÀN CỤM ngày này (TB đơn giản qua các tuyến có chạy)
-  volAvg: number | null; // TB lấp đầy thể tích TOÀN CỤM ngày này
+  volAvg: number | null; // TB lấp đầy Volume TOÀN CỤM ngày này
   tripCount: number; // số CHUYẾN (ma_chuyen) chạy trong ngày, TOÀN CỤM
   routeCount: number; // số TUYẾN có dữ liệu trong ngày (hợp cả tuyến chỉ có weight lẫn tuyến chỉ có volume)
 }
@@ -132,7 +132,7 @@ export interface TlldIndex {
   last30: string[]; // tối đa 30 ngày gần nhất có dữ liệu (tăng dần) — biểu đồ theo tuần/tháng
   allDates: string[]; // TOÀN BỘ ngày "đã chốt" có dữ liệu, không giới hạn 30 ngày (tăng dần)
   event: EventWindow | null; // đợt event ngày đôi gần nhất
-  // ngày -> {TB khối lượng, TB thể tích, số chuyến, số tuyến} TOÀN CỤM — cho khung Tổng Quan
+  // ngày -> {TB khối lượng, TB Volume, số chuyến, số tuyến} TOÀN CỤM — cho khung Tổng Quan
   // (scorecard N-1 so N-2, so cùng thứ tuần trước). Chỉ tính cho ngày "đã chốt" (usable), thêm 01/09.
   clusterDaily: Map<string, TlldClusterDay>;
   lastSync: number;
@@ -164,9 +164,25 @@ async function fetchTlldLive(signal?: AbortSignal): Promise<DongChuyenApi[]> {
   return (d.rows || []) as DongChuyenApi[];
 }
 
-// CACHE: tránh gọi lại khi nhiều nơi cùng cần (Overview + TLLD Tuyến…) hoặc quay lại
-// trang trong TTL. force=true để làm mới tay.
+// CACHE DÒNG THÔ (chưa gộp): tách riêng khỏi cache chỉ mục đã gộp bên dưới để LỌC THEO VÙNG
+// (loadTlldForCodes, thêm 01/09 — xem lib/useTlld.ts useTlldRegion) dùng CHUNG 1 lần tải mạng,
+// chỉ tính lại phần gộp (rẻ) thay vì gọi lại /api/tlld-live riêng cho mỗi vùng.
 const TLLD_TTL = 45000; // 45s: dưới nhịp poll 60s -> vẫn realtime, nhưng chuyển/về trang dùng lại ngay.
+let rowsCache: { at: number; data: DongChuyenApi[] } | null = null;
+let rowsInflight: Promise<DongChuyenApi[]> | null = null;
+
+async function loadTlldRows(signal?: AbortSignal, force = false): Promise<DongChuyenApi[]> {
+  if (!force) {
+    if (rowsCache && Date.now() - rowsCache.at < TLLD_TTL) return rowsCache.data;
+    if (rowsInflight) return rowsInflight; // đang tải -> dùng chung, KHÔNG tải 13MB lần 2
+  }
+  const run = fetchTlldLive(signal).then((d) => { rowsCache = { at: Date.now(), data: d }; return d; });
+  rowsInflight = run;
+  try { return await run; } finally { rowsInflight = null; }
+}
+
+// CACHE CHỈ MỤC TOÀN CỤM (đã gộp, KHÔNG lọc vùng) — dùng cho tra cứu theo mã tuyến ở khắp nơi
+// (Lịch Tải, Ghép Tải, GSVT, Overview…) + tab "Báo Cáo" (TlldClusterReport, CỐ Ý xem toàn cụm).
 let tlldCache: { at: number; data: TlldIndex } | null = null;
 let tlldInflight: Promise<TlldIndex> | null = null;
 
@@ -175,12 +191,29 @@ export async function loadTlld(signal?: AbortSignal, force = false): Promise<Tll
     if (tlldCache && Date.now() - tlldCache.at < TLLD_TTL) return tlldCache.data;
     if (tlldInflight) return tlldInflight; // đang tải -> dùng chung, KHÔNG tải 13MB lần 2
   }
-  const run = loadTlldUncached(signal).then((d) => { tlldCache = { at: Date.now(), data: d }; return d; });
+  const run = loadTlldRows(signal, force).then((rows) => {
+    const idx = buildTlldIndex(rows);
+    tlldCache = { at: Date.now(), data: idx };
+    return idx;
+  });
   tlldInflight = run;
   try { return await run; } finally { tlldInflight = null; }
 }
 
-async function loadTlldUncached(signal?: AbortSignal): Promise<TlldIndex> {
+/** Tải TLLD CHỈ CHO các mã tuyến cho trước (vd. đúng vùng/tab Lịch Tải đang chọn) — dùng cho khung
+ *  "🩺 Sức khoẻ vận hành TLLD" (TlldSucKhoe). Sếp yêu cầu 01/09: đổi tab vùng phải đổi số, không
+ *  giữ nguyên toàn cụm như bản đầu. Lọc NGAY TỪ DÒNG THÔ (1 dòng = 1 chuyến) rồi gộp lại bằng ĐÚNG
+ *  buildTlldIndex() dùng chung với bản toàn cụm -> clusterDaily/byChuyen/byCode ra ĐÚNG số riêng
+ *  của nhóm tuyến này, không suy ra/ước lượng từ số toàn cụm (đúng quy tắc "không bịa" của dự án —
+ *  xem skill m12-conventions). Dùng CHUNG cache dòng thô ở trên (cùng TTL) -> đổi vùng KHÔNG tốn
+ *  thêm request mạng, chỉ tính lại phần gộp (rẻ — mảng vài nghìn dòng). */
+export async function loadTlldForCodes(allowedCodes: Set<string>, signal?: AbortSignal, force = false): Promise<TlldIndex> {
+  const rows = await loadTlldRows(signal, force);
+  const filtered = rows.filter((r) => allowedCodes.has(normCode(r.ma_tuyen || "")));
+  return buildTlldIndex(filtered);
+}
+
+function buildTlldIndex(rows: DongChuyenApi[]): TlldIndex {
   // code -> date -> tích luỹ tlld_weight theo CHIỀU (nhập/xuất) + tổng (all).
   // Quy ước: tuyến bắt đầu từ KHO (giao) -> lấy chiều XUẤT; từ BƯU CỤC (lấy) -> chiều NHẬP.
   type DayAcc = { nhap: { s: number; c: number }; xuat: { s: number; c: number }; all: { s: number; c: number } };
@@ -201,15 +234,15 @@ async function loadTlldUncached(signal?: AbortSignal): Promise<TlldIndex> {
   const dayStat = new Map<string, { n: number; nz: number }>();
   // code -> hub -> số dòng — để suy ra hub NGUỒN chính của mỗi mã tuyến (cho báo cáo Tổng cụm theo hub).
   const hubAcc = new Map<string, Map<string, number>>();
-  // code -> date -> tích luỹ tlld_vol (THEO THỂ TÍCH/số đơn) — SONG SONG với `acc` (khối lượng),
+  // code -> date -> tích luỹ tlld_vol (THEO VOLUME/số đơn) — SONG SONG với `acc` (khối lượng),
   // CÙNG cấu trúc DayAcc, độc lập hoàn toàn (không phụ thuộc tlld_weight có null hay không) —
-  // 01/09: rebuild TLLD Tuyến, Sếp yêu cầu thêm góc nhìn thể tích bên cạnh khối lượng.
+  // 01/09: rebuild TLLD Tuyến, Sếp yêu cầu thêm góc nhìn Volume bên cạnh khối lượng.
   const accTlldVol = new Map<string, Map<string, DayAcc>>();
   // ngày -> tập mã chuyến CHẠY trong ngày đó (đếm SỐ CHUYẾN/ngày cho khung Tổng Quan — không lẫn
   // với chuyenAcc bên dưới, vốn gom theo TUYẾN chứ không theo ngày).
   const tripsByDate = new Map<string, Set<string>>();
   /** Cộng 1 giá trị vào DayAcc (map[code][date]) theo đúng CHIỀU đã chọn — dùng chung cho cả
-   *  tích luỹ khối lượng (acc) lẫn thể tích (accTlldVol), tránh chép lại logic 2 lần. */
+   *  tích luỹ khối lượng (acc) lẫn Volume (accTlldVol), tránh chép lại logic 2 lần. */
   function bump(target: Map<string, Map<string, DayAcc>>, code: string, date: string, val: number, dir: "xuat" | "nhap" | "all") {
     let m = target.get(code);
     if (!m) { m = new Map(); target.set(code, m); }
@@ -229,7 +262,7 @@ async function loadTlldUncached(signal?: AbortSignal): Promise<TlldIndex> {
     const vRatio = r.tlld_vol_chuyen;
     const mc = r.ma_chuyen || "";
     const hub = r.hub || "—";
-    const dir = dirOf(r.loai_tai || ""); // tính 1 lần, dùng chung cho cả khối lượng lẫn thể tích
+    const dir = dirOf(r.loai_tai || ""); // tính 1 lần, dùng chung cho cả khối lượng lẫn Volume
 
     if (code) {
       let hm = hubAcc.get(code);
@@ -284,8 +317,8 @@ async function loadTlldUncached(signal?: AbortSignal): Promise<TlldIndex> {
       }
     }
 
-    // ---- TLLD THEO THỂ TÍCH — độc lập với khối lượng (không gộp vào gate w==null bên dưới,
-    // để 1 dòng thiếu tlld_weight nhưng có tlld_vol vẫn không mất dữ liệu thể tích). ----
+    // ---- TLLD THEO VOLUME — độc lập với khối lượng (không gộp vào gate w==null bên dưới,
+    // để 1 dòng thiếu tlld_weight nhưng có tlld_vol vẫn không mất dữ liệu Volume). ----
     if (code && date && vRatio != null) bump(accTlldVol, code, date, vRatio, dir);
 
     // ---- TLLD THEO KHỐI LƯỢNG — GIỮ NGUYÊN hành vi cũ (gate + dayStat) không đổi. ----
@@ -297,7 +330,7 @@ async function loadTlldUncached(signal?: AbortSignal): Promise<TlldIndex> {
     bump(acc, code, date, w, dir);
   }
 
-  for (const r of await fetchTlldLive(signal)) processDong(r);
+  for (const r of rows) processDong(r);
 
   // Ngày "đã chốt" = ≥70% dòng có giá trị > 0 (loại ngày đang nhập dở -> toàn 0).
   const complete = [...dayStat.entries()]
@@ -374,7 +407,7 @@ async function loadTlldUncached(signal?: AbortSignal): Promise<TlldIndex> {
     let hub = "—";
     if (hubCounts) { let best = -1; for (const [h, c] of hubCounts) if (c > best) { best = c; hub = h; } }
 
-    // ── TLLD THEO THỂ TÍCH — SONG SONG với khối lượng ở trên, DÙNG CHUNG chiều `dir` đã chọn
+    // ── TLLD THEO VOLUME — SONG SONG với khối lượng ở trên, DÙNG CHUNG chiều `dir` đã chọn
     // (nhất quán: 1 tuyến chỉ có 1 chiều Xuất/Nhập cho cả 2 chỉ số) và CÙNG các cửa sổ ngày
     // (last7/last14/last30/refDate) đã tính 1 lần ở trên — không tính lại. ──
     const mVol = accTlldVol.get(code);
@@ -481,7 +514,7 @@ export function buildTlldDigest(
 
 /* ============================================================
    TỔNG QUAN TLLD — Sức khoẻ vận hành: scorecard N-1/N-2/cùng thứ tuần trước,
-   tuyến/chuyến lệch khối lượng-thể tích, chuyến TLLD thấp, chi tiết điểm dừng.
+   tuyến/chuyến lệch khối lượng-Volume, chuyến TLLD thấp, chi tiết điểm dừng.
    Thêm 01/09/2026 khi rebuild TLLD Tuyến theo yêu cầu Sếp.
    ============================================================ */
 
@@ -551,11 +584,11 @@ export function danhSachChuyenThap(
 export interface TlldLechKhoiLuongTheTich {
   code: string;
   weight: number; // avg7 (fallback n1) khối lượng
-  volume: number; // avg7 (fallback n1) thể tích
-  lech: number; // weight - volume (âm = khối lượng thấp hơn thể tích, dương = ngược lại)
+  volume: number; // avg7 (fallback n1) Volume
+  lech: number; // weight - volume (âm = khối lượng thấp hơn Volume, dương = ngược lại)
 }
 
-/** Tuyến có TLLD khối lượng và thể tích LỆCH NHAU đáng kể (vd đơn nhẹ-cồng kềnh: đầy thể tích
+/** Tuyến có TLLD khối lượng và Volume LỆCH NHAU đáng kể (vd đơn nhẹ-cồng kềnh: đầy Volume
  *  nhưng nhẹ cân, hoặc ngược lại đơn nặng-gọn: đầy cân nhưng thừa chỗ) — Sếp yêu cầu 01/09. */
 export function computeLechKhoiLuongTheTich(index: TlldIndex, nguong = 0.15): TlldLechKhoiLuongTheTich[] {
   const out: TlldLechKhoiLuongTheTich[] = [];

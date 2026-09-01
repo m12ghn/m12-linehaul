@@ -2,23 +2,30 @@
    TLLD SỨC KHOẺ VẬN HÀNH — khung "Tổng Quan" mới của tab TLLD Tuyến, 01/09/2026.
 
    Sếp yêu cầu rebuild TLLD Tuyến với các góc nhìn:
-   - 2 CHỈ SỐ song song: TLLD theo THỂ TÍCH (số đơn) và theo KHỐI LƯỢNG (weight) —
-     xem thêm src/lib/tlld.ts (TlldRoute.tlldVol, thêm 01/09).
+   - 2 CHỈ SỐ song song: TLLD theo VOLUME (số đơn — KHÔNG phải thể tích/m3, chỉnh lại
+     01/09 theo đúng ý Sếp) và theo KHỐI LƯỢNG (weight) — xem thêm src/lib/tlld.ts
+     (TlldRoute.tlldVol, thêm 01/09).
    - Scorecard TLLD (vol/weight) N-1 so N-2 (hôm kia) và so CÙNG THỨ tuần trước,
      kèm SỐ CHUYẾN (trip_code) — xem buildTongQuanTlld() ở tlld.ts.
    - "Lịch tải/chuyến TLLD thấp" — góc nhìn TỪNG CHUYẾN (1 mã tuyến/lịch tải có
      nhiều chuyến theo từng ngày), khác các nơi khác trong app vốn chỉ tính theo
      TB TUYẾN — xem danhSachChuyenThap().
-   - Lệch TLLD khối lượng vs thể tích (đơn nhẹ-cồng kềnh hoặc nặng-gọn) — xem
+   - Lệch TLLD khối lượng vs Volume (đơn nhẹ-cồng kềnh hoặc nặng-gọn) — xem
      computeLechKhoiLuongTheTich().
    - Bấm 1 chuyến TLLD thấp -> tải CHI TIẾT TỪNG ĐIỂM DỪNG (mức thấp nhất,
      tlld_daily) theo yêu cầu, KHÔNG tải sẵn hàng loạt (nặng) — fetchDiemDungChuyen().
+     (01/09: thẻ tra cứu 1 chuyến ở TlldTuyen.tsx — chuyenHit — cũng có nút xem theo
+     điểm dừng tương tự, không chỉ riêng các chuyến TLLD thấp ở khung này.)
+
+   LỌC THEO VÙNG (01/09, sửa lại theo yêu cầu Sếp): `index` truyền vào KHÔNG còn là chỉ
+   mục toàn cụm — TlldTuyen.tsx nay truyền `regionIndex` từ useTlldRegion(), CHỈ gồm các
+   mã tuyến (scheduler_name) thuộc đúng vùng/tab Lịch Tải đang chọn -> đổi tab vùng là số
+   đổi theo, không còn đứng yên như bản đầu (TOÀN CỤM, đã bị Sếp báo là SAI hành vi).
 
    Đặt ở ĐẦU khung "Tổng Quan" (view=tong-quan) của TlldTuyen.tsx, TRƯỚC danh sách
    duyệt/tìm tuyến — không đụng "🌐 Tổng TLLD của Cụm" (TlldClusterReport, ở tab
-   "Báo Cáo") vốn đã rất đầy đủ ở mức khối lượng theo Ngày/Tuần/Tháng, chỉ CHƯA có
-   thể tích + góc nhìn chuyến/điểm dừng — bổ sung đúng phần còn thiếu, không làm
-   lại phần đã có.
+   "Báo Cáo") vốn đã rất đầy đủ ở mức khối lượng theo Ngày/Tuần/Tháng, cố ý xem TOÀN
+   CỤM (không lọc vùng) — bổ sung đúng phần còn thiếu, không làm lại phần đã có.
 
    TẤT CẢ số liệu tính THẲNG từ dữ liệu TLLD thật (Data API -> Supabase) — không
    suy diễn khi thiếu (đúng quy tắc dự án, xem skill m12-conventions mục 2).
@@ -118,7 +125,7 @@ function DongChuyenThap({
             ) : (
               <table className="tc-grid" style={{ width: "100%" }}>
                 <thead>
-                  <tr><th>#</th><th>Kho</th><th>Loại tải</th><th>TLLD KL (điểm)</th><th>TLLD TT (điểm)</th><th>Khối lượng</th><th>Số đơn</th></tr>
+                  <tr><th>#</th><th>Kho</th><th>Loại tải</th><th>TLLD KL (điểm)</th><th>TLLD VOL (điểm)</th><th>Khối lượng</th><th>Số đơn</th></tr>
                 </thead>
                 <tbody>
                   {diem.map((d) => (
@@ -189,7 +196,7 @@ export function TlldSucKhoe({ index }: { index: TlldIndex | null }) {
           giaTriN1={tq.weightSoN2.giaTri} soN2={tq.weightSoN2} soTuanTruoc={tq.weightSoTuanTruoc}
         />
         <TheScorecard
-          ic="📦" title="TLLD theo THỂ TÍCH (số đơn)" kieu="pct" thuTuanTruoc={thuTuanTruoc}
+          ic="📦" title="TLLD theo VOLUME (số đơn)" kieu="pct" thuTuanTruoc={thuTuanTruoc}
           giaTriN1={tq.volSoN2.giaTri} soN2={tq.volSoN2} soTuanTruoc={tq.volSoTuanTruoc}
         />
         <TheScorecard
@@ -198,7 +205,7 @@ export function TlldSucKhoe({ index }: { index: TlldIndex | null }) {
         />
       </div>
       <p className="pe-sub" style={{ margin: "6px 0 14px", fontSize: 12.5 }}>
-        "TLLD theo khối lượng/thể tích" = TB đơn giản qua các tuyến CÓ CHẠY ngày đó (không trọng số
+        "TLLD theo khối lượng/Volume" = TB đơn giản qua các tuyến CÓ CHẠY ngày đó (không trọng số
         theo tải trọng/số chuyến) — cùng quy ước tính "TB lấp đầy" dùng xuyên suốt dashboard. Ngày N-1
         mới <b>{tq.soTuyenN1 ?? "—"}</b> tuyến có dữ liệu.
       </p>
@@ -208,19 +215,19 @@ export function TlldSucKhoe({ index }: { index: TlldIndex | null }) {
           <span>⚠️ Chuyến TLLD thấp <span style={{ color: "var(--muted)", fontWeight: 600 }}>({chuyenThap.length} chuyến, &lt;60% — bấm 1 dòng để xem chi tiết điểm dừng)</span></span>
           <div style={{ display: "flex", gap: 6 }}>
             <button className={"cat-chip" + (theoChuyen === "weight" ? " active" : "")} onClick={() => setTheoChuyen("weight")}>Theo khối lượng</button>
-            <button className={"cat-chip" + (theoChuyen === "vol" ? " active" : "")} onClick={() => setTheoChuyen("vol")}>Theo thể tích</button>
+            <button className={"cat-chip" + (theoChuyen === "vol" ? " active" : "")} onClick={() => setTheoChuyen("vol")}>Theo Volume</button>
           </div>
         </div>
         {chuyenThap.length === 0 ? (
-          <div className="sl-empty">Không có chuyến nào TLLD {theoChuyen === "weight" ? "khối lượng" : "thể tích"} dưới 60%.</div>
+          <div className="sl-empty">Không có chuyến nào TLLD {theoChuyen === "weight" ? "khối lượng" : "Volume"} dưới 60%.</div>
         ) : (
           <div className="tc-wrap scroll-frame" style={{ marginTop: 8 }}>
             <table className="tc-grid">
               <thead>
                 <tr>
                   <th>Mã chuyến</th><th>Mã tuyến</th><th>Ngày</th>
-                  <th style={{ width: 90 }}>{theoChuyen === "weight" ? "TLLD KL" : "TLLD TT"}</th>
-                  <th style={{ width: 90 }}>{theoChuyen === "weight" ? "TLLD TT" : "TLLD KL"}</th>
+                  <th style={{ width: 90 }}>{theoChuyen === "weight" ? "TLLD KL" : "TLLD VOL"}</th>
+                  <th style={{ width: 90 }}>{theoChuyen === "weight" ? "TLLD VOL" : "TLLD KL"}</th>
                   <th>Biển số</th>
                 </tr>
               </thead>
@@ -245,10 +252,10 @@ export function TlldSucKhoe({ index }: { index: TlldIndex | null }) {
 
       <div className="section-card" style={{ marginTop: 12 }}>
         <div className="tq-sub">
-          🔀 Lệch TLLD khối lượng ↔ thể tích <span style={{ color: "var(--muted)", fontWeight: 600 }}>({lech.length} tuyến lệch ≥15 điểm % · TB 7 ngày, hoặc N-1 nếu chưa đủ 7 ngày)</span>
+          🔀 Lệch TLLD khối lượng ↔ Volume <span style={{ color: "var(--muted)", fontWeight: 600 }}>({lech.length} tuyến lệch ≥15 điểm % · TB 7 ngày, hoặc N-1 nếu chưa đủ 7 ngày)</span>
         </div>
         <p className="pe-sub" style={{ margin: "4px 0 8px", fontSize: 12.5 }}>
-          Khối lượng thấp hơn thể tích rõ = đơn CỒNG KỀNH-NHẸ CÂN (chiếm chỗ nhưng không nặng — xe đầy
+          Khối lượng thấp hơn Volume rõ = đơn CỒNG KỀNH-NHẸ CÂN (chiếm chỗ nhưng không nặng — xe đầy
           chỗ mà vẫn còn dư tải trọng). Ngược lại = đơn NẶNG-GỌN (còn dư chỗ nhưng đã đầy cân).
         </p>
         {lech.length === 0 ? (
@@ -257,7 +264,7 @@ export function TlldSucKhoe({ index }: { index: TlldIndex | null }) {
           <div className="tc-wrap scroll-frame">
             <table className="tc-grid">
               <thead>
-                <tr><th>Mã tuyến</th><th style={{ width: 90 }}>TLLD KL</th><th style={{ width: 90 }}>TLLD TT</th><th style={{ width: 110 }}>Lệch</th><th>Hướng</th></tr>
+                <tr><th>Mã tuyến</th><th style={{ width: 90 }}>TLLD KL</th><th style={{ width: 90 }}>TLLD VOL</th><th style={{ width: 110 }}>Lệch</th><th>Hướng</th></tr>
               </thead>
               <tbody>
                 {lech.slice(0, 30).map((x) => (
