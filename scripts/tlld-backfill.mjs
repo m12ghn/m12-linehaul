@@ -28,6 +28,12 @@
    Khoảng ngày là NỬA KHOẢNG [từ, đến) — ngày cuối không bao gồm.
    Secret nhận qua tham số dòng lệnh, không hardcode.
    Chạy lại nhiều lần vô hại: endpoint ghi đè theo khoá (ngày, mã chuyến, thứ tự).
+
+   ⚠ --force (thêm 01/09): endpoint /api/cron/tlld có rào 12h chống nạp trùng —
+   khoảng ngày đã nạp trong 12h gần nhất bị BỎ QUA IM LẶNG (không lỗi, chỉ log
+   "đã nạp lúc..."). Muốn CỐ TÌNH ghi đè khoảng đã nạp rồi (vd. sau khi sửa lỗi
+   dữ liệu như sự cố #5/#6, cần nạp lại đúng khoảng vừa nạp sai) thì thêm cờ này:
+     node scripts/tlld-backfill.mjs "<CRON_SECRET>" 2026-08-30 2026-09-01 --force
    ============================================================ */
 
 const args = process.argv.slice(2);
@@ -39,10 +45,16 @@ const viTri = args.filter((a) => !a.startsWith("--"));
 const [SECRET, TU, DEN] = viTri;
 const BASE = co("base", "https://m12-linehaul.vercel.app");
 const BUOC = Math.max(1, Number(co("ngay", "3")) || 3);
+// Rào 12h chống nạp trùng ở api/cron/tlld.ts (xem comment ở đó) khiến chạy lại
+// backfill cho khoảng NGÀY ĐÃ NẠP RỒI trong 12h gần nhất bị bỏ qua im lặng —
+// đúng ý khi chỉ muốn nạp thêm ngày mới, nhưng SAI ý khi cố tình muốn GHI ĐÈ
+// (vd. sau khi sửa lỗi mã tuyến, cần nạp lại đúng khoảng vừa nạp). Thêm 01/09.
+const FORCE = args.includes("--force");
 
 if (!SECRET || !TU || !DEN) {
-  console.error('Dùng: node scripts/tlld-backfill.mjs "<CRON_SECRET>" <tu-ngay> <den-ngay> [--ngay=3] [--base=...]');
+  console.error('Dùng: node scripts/tlld-backfill.mjs "<CRON_SECRET>" <tu-ngay> <den-ngay> [--ngay=3] [--base=...] [--force]');
   console.error('Ví dụ: node scripts/tlld-backfill.mjs "$CRON_SECRET" 2026-06-01 2026-09-01');
+  console.error('Ví dụ ghi đè khoảng đã nạp rồi: node scripts/tlld-backfill.mjs "$CRON_SECRET" 2026-08-30 2026-09-01 --force');
   process.exit(1);
 }
 for (const [ten, v] of [["từ", TU], ["đến", DEN]]) {
@@ -62,7 +74,7 @@ for (let t = Date.parse(TU); t < Date.parse(DEN); t += BUOC * NGAY) {
 
 console.log(`▸ ${TU} .. ${DEN} (không gồm ngày cuối), chia ${BUOC} ngày/lượt`);
 console.log(`▸ ${khoang.length} lượt POST (GET /next không tính quota)`);
-console.log(`▸ Đích: ${BASE}/api/cron/tlld\n`);
+console.log(`▸ Đích: ${BASE}/api/cron/tlld${FORCE ? "  (--force: ghi đè cả khoảng đã nạp rồi)" : ""}\n`);
 
 let tongDoc = 0, tongGhi = 0, tongChuyen = 0, tongThieuTuyen = 0, quotaCuoi = null, boQua = 0;
 const loi = [];
@@ -71,7 +83,7 @@ for (const [i, [tu, den]] of khoang.entries()) {
   const nhan = `[${String(i + 1).padStart(3)}/${khoang.length}] ${tu} → ${den}`;
   const batDau = Date.now();
   try {
-    const r = await fetch(`${BASE}/api/cron/tlld?tu=${tu}&den=${den}`, {
+    const r = await fetch(`${BASE}/api/cron/tlld?tu=${tu}&den=${den}${FORCE ? "&force=1" : ""}`, {
       headers: { authorization: "Bearer " + SECRET },
     });
     const d = await r.json().catch(() => ({}));
