@@ -197,8 +197,13 @@ export const SHEETS: SheetDef[] = [
   { key: "noi-vung-hcm", gid: "961518640", label: "Nội Vùng HCM", hidden: true },
   { key: "lien-vung-mn", gid: "84848529", label: "Liên Vùng MN" },
   { key: "mbh-song-than", gid: "541305122", label: "MBH Sóng Thần" },
-  { key: "mbh-tan-tao", gid: "1937583700", label: "MBH Tân Tạo" },
-  { key: "mbh-tan-thuan-q7", gid: "722712650", label: "MBH Tân Thuận Q7" },
+  // 01/09/2026: gộp 2 tab cũ "MBH Tân Tạo" (gid 1937583700) + "MBH Tân Thuận
+  // Q7" (gid 722712650) thành 1 tab duy nhất "Mobile Hub" — Sếp xác nhận cấu
+  // trúc sheet Lịch Tải thật đã đổi, không còn tách riêng nữa. Chưa có gid
+  // thật (sheet không public, vẫn nạp qua CSV tải tay — xem
+  // scripts/import-sheets.mjs) nên để trống; xem migration 0006 và mục "TLLD
+  // Tuyến"/trạng thái migration để biết chi tiết đợt gộp này.
+  { key: "mobile-hub", gid: "", label: "Mobile Hub" },
 ];
 
 /** Các vùng HIỂN THỊ trên UI (bỏ vùng `hidden`). Dùng ở MỌI bộ chọn vùng (SheetTabs, dropdown

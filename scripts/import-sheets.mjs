@@ -64,8 +64,11 @@ const REGIONS = [
   { key: "noi-vung-hcm",     gid: "961518640" },
   { key: "lien-vung-mn",     gid: "84848529" },
   { key: "mbh-song-than",    gid: "541305122" },
-  { key: "mbh-tan-tao",      gid: "1937583700" },
-  { key: "mbh-tan-thuan-q7", gid: "722712650" },
+  // 01/09/2026: "mbh-tan-tao" (gid 1937583700) + "mbh-tan-thuan-q7" (gid
+  // 722712650) gộp thành 1 vùng "mobile-hub" duy nhất — xem migration 0006 +
+  // comment tương ứng trong src/config.ts. Chưa có gid thật (sheet không
+  // public, đọc CSV tải tay), tên file phải đúng "mobile-hub.csv".
+  { key: "mobile-hub",       gid: "" },
 ];
 // BẢN SAO của EXCLUDED_REGION_KEYS trong src/config.ts — Sếp chốt 24/07/2026:
 // M12 không còn quản Nội Vùng HCM nữa, và nội dung tab (gid 961518640) đã đổi
