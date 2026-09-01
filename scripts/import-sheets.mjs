@@ -10,6 +10,10 @@
      node scripts/import-sheets.mjs --only=routes  # chỉ 1 phần
      node scripts/import-sheets.mjs --dry          # đọc & in thống kê, KHÔNG ghi
 
+     # Bước "routes": sheet Lịch Tải KHÔNG được phép share ra ngoài tổ chức
+     # (đã xác nhận với user 01/09) -> đọc CSV tải tay thay vì gọi mạng:
+     node scripts/import-sheets.mjs --only=routes --csv-dir=./nhap-csv --dry
+
    NGUYÊN TẮC: chạy lại nhiều lần vẫn an toàn (idempotent) — dùng upsert theo
    khoá tự nhiên, không nhân bản dữ liệu. Cứ chạy thử `--dry` trước.
 
@@ -22,10 +26,17 @@
    - Các bước "routes"/"vehicles"/"sanluong" đổi cách đọc Sheet: bỏ Sheets
      API v4 (JWT service-account hoặc GOOGLE_API_KEY), đọc thẳng CSV công
      khai qua gviz/export — ĐÚNG 2 nguồn dự phòng #2/#3 mà frontend
-     (src/config.ts csvSources()) đã và đang dùng thật cho các sheet này,
-     nên không cần xin thêm key/service-account nào cả. Không còn đọc
-     GSHEETS_SA_B64/GOOGLE_API_KEY.
+     (src/config.ts csvSources()) đã và đang dùng thật cho các sheet này.
+     ⚠ Sheet Lịch Tải (bước "routes") hoá ra KHÔNG public như các sheet
+     khác — user xác nhận không được phép share ra ngoài tổ chức, gviz/export
+     trả 401 khi gọi không có cookie đăng nhập Google. Thêm cờ `--csv-dir=`:
+     khi có, bước "routes" đọc file CSV tải TAY từ thư mục đó thay vì gọi
+     mạng (xem readGridTuFile() + hướng dẫn đặt tên file bên dưới), KHÔNG
+     đụng gì tới bước "vehicles"/"sanluong" (vẫn gọi mạng như cũ, sheet
+     khác, chưa gặp lỗi 401).
    ============================================================ */
+
+import { readFileSync } from "node:fs";
 
 const SB_URL = process.env.SUPABASE_URL;
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -34,6 +45,8 @@ const SB_SCHEMA = process.env.SUPABASE_SCHEMA || "m12";
 const DRY = process.argv.includes("--dry");
 const ONLY = (process.argv.find((a) => a.startsWith("--only=")) || "").split("=")[1] || "";
 const ACTOR = process.env.IMPORT_ACTOR || "import-script";
+// Thư mục chứa CSV tải tay cho bước "routes" (sheet Lịch Tải không public được).
+const CSV_DIR = (process.argv.find((a) => a.startsWith("--csv-dir=")) || "").split("=")[1] || "";
 
 // GHN Data API (Trino) — chỉ bước "warehouses" dùng. Cùng base url với api/_lib/tlldQuery.ts.
 const DATA_API_TOKEN = process.env.DATA_API_TOKEN;
@@ -184,6 +197,25 @@ async function readGrid(sheetId, gid) {
   throw new Error(`doc_sheet_csv_that_bai id=${sheetId} gid=${gid}: ${loiCuoi?.message || loiCuoi}`);
 }
 
+/**
+ * Đọc 1 tab từ file CSV tải TAY (dùng khi sheet không được phép share ra
+ * ngoài tổ chức, gviz/export trả 401 — trường hợp sheet Lịch Tải, 01/09).
+ * Tên file PHẢI đúng `<key vùng>.csv`, đặt trong thư mục truyền qua --csv-dir=.
+ * Cách lấy: mở sheet trên trình duyệt (đã đăng nhập sẵn) -> bấm từng tab ->
+ * nhìn URL có "#gid=<số>" để biết đang ở tab nào (khớp bảng REGIONS bên dưới)
+ * -> File > Download > Comma Separated Values (.csv) -> đổi tên file đúng key.
+ */
+function readGridTuFile(key) {
+  const path = `${CSV_DIR.replace(/\/+$/, "")}/${key}.csv`;
+  let text;
+  try {
+    text = readFileSync(path, "utf8");
+  } catch (e) {
+    throw new Error(`khong_doc_duoc_file_csv ${path}: ${e.message}`);
+  }
+  return parseCSV(text);
+}
+
 // ---------- Supabase ----------
 async function sbWrite(table, rows, onConflict) {
   if (!rows.length) return 0;
@@ -318,7 +350,9 @@ async function importWarehouses() {
 }
 
 async function importRoutes() {
-  console.log("\n▸ Lịch tải: tuyến + điểm dừng");
+  console.log(
+    "\n▸ Lịch tải: tuyến + điểm dừng" + (CSV_DIR ? ` (đọc CSV tải tay từ ${CSV_DIR})` : "")
+  );
   // Bản đồ tên kho -> id, để gán warehouse_id cho từng điểm dừng ngay lúc nạp.
   const whs = await sbSelect("warehouses", "select=id,name_norm&limit=10000");
   const whByNorm = new Map(whs.map((w) => [w.name_norm, w.id]));
@@ -327,7 +361,7 @@ async function importRoutes() {
   let totalRoutes = 0, totalStops = 0, unmatched = new Set();
 
   for (const reg of REGIONS) {
-    const grid = await readGrid(SHEET_ID, reg.gid);
+    const grid = CSV_DIR ? readGridTuFile(reg.key) : await readGrid(SHEET_ID, reg.gid);
     const h = findHeaderRow(grid);
     const H = grid[h] || [];
     const c = {
