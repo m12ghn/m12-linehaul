@@ -5,13 +5,19 @@
    Cách chạy:
      export SUPABASE_URL="https://xxxx.supabase.co"
      export SUPABASE_SERVICE_ROLE_KEY="..."
-     export GSHEETS_SA_B64="$(base64 -w0 service-account.json)"   # hoặc GOOGLE_API_KEY
+     export DATA_API_TOKEN="..."                                  # bước "warehouses" (Data API)
+     export GSHEETS_SA_B64="$(base64 -w0 service-account.json)"   # hoặc GOOGLE_API_KEY — bước routes/vehicles/sanluong
      node scripts/import-sheets.mjs                # nạp tất cả
      node scripts/import-sheets.mjs --only=routes  # chỉ 1 phần
      node scripts/import-sheets.mjs --dry          # đọc & in thống kê, KHÔNG ghi
 
    NGUYÊN TẮC: chạy lại nhiều lần vẫn an toàn (idempotent) — dùng upsert theo
    khoá tự nhiên, không nhân bản dữ liệu. Cứ chạy thử `--dry` trước.
+
+   01/09/2026: bước "warehouses" đổi nguồn Google Sheet -> GHN Data API
+   (bảng iceberg.dwh.dim_warehouse, có sẵn warehouse_id/warehouse_name/lat/long,
+   không cần dò khớp tên nữa). Cần DATA_API_TOKEN (lấy token đang set trên
+   Vercel → Settings → Environment Variables, cùng token dùng cho api/cron/tlld.ts).
    ============================================================ */
 
 const SB_URL = process.env.SUPABASE_URL;
@@ -21,6 +27,10 @@ const SB_SCHEMA = process.env.SUPABASE_SCHEMA || "m12";
 const DRY = process.argv.includes("--dry");
 const ONLY = (process.argv.find((a) => a.startsWith("--only=")) || "").split("=")[1] || "";
 const ACTOR = process.env.IMPORT_ACTOR || "import-script";
+
+// GHN Data API (Trino) — chỉ bước "warehouses" dùng. Cùng base url với api/_lib/tlldQuery.ts.
+const DATA_API_TOKEN = process.env.DATA_API_TOKEN;
+const DATA_API_BASE = process.env.DATA_API_BASE || "https://data-api-provider.ghn.vn";
 
 if (!DRY && (!SB_URL || !SB_KEY)) {
   console.error("Thiếu SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY");
@@ -46,9 +56,71 @@ const TLLD_TABS = [
 ];
 const VEHICLE_SHEET_ID = "1YBnuXDh6pZEQ0DpfLCPYV1jNK6J4CtocuP7FM1VeOxc";
 const VEHICLE_TABS = ["555582603", "363552999", "570963534", "1947785067"];
+// 01/09/2026: KHÔNG còn dùng — bước "warehouses" đổi sang đọc Data API
+// (iceberg.dwh.dim_warehouse, xem dataApiQuery()/importWarehouses() bên dưới).
+// Giữ lại 2 hằng số để còn đối chiếu/rollback nếu Data API có vấn đề.
 const WAREHOUSE_GEO_SHEET_ID = "1lqkSifW2ROTnlYMqhBNcKgHgDd5z-ktcn60cCawqyRs";
 const WAREHOUSE_GEO_GID = "0";
 const BC_LAY_GID = "266027908";
+
+// ---------- GHN Data API (Trino SQL over HTTP) — chỉ bước "warehouses" dùng ----------
+// BẢN SAO rút gọn của chayQuery() trong api/_lib/tlldQuery.ts (không import được
+// từ đây vì file đó là .ts, còn script này chạy thẳng bằng node, không qua build).
+// Sửa logic poll/backoff ở 1 bên thì nhớ soát lại bên kia — cùng rủi ro lệch bản
+// như normalize.ts/build-geo.mjs đã ghi trong quy tắc dự án.
+async function dataApiQuery(sql) {
+  if (!DATA_API_TOKEN) throw new Error("Thiếu DATA_API_TOKEN");
+  const H = { authorization: "Bearer " + DATA_API_TOKEN, "content-type": "application/json" };
+  const ngu = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const post = async () => {
+    const r = await fetch(DATA_API_BASE + "/api/v1/queries", {
+      method: "POST", headers: H, body: JSON.stringify({ sql }),
+    });
+    const txt = await r.text();
+    if (!r.ok) throw new Error(`data_api_${r.status}: ${txt.slice(0, 300)}`);
+    return txt ? JSON.parse(txt) : {};
+  };
+  const next = async (qid) => {
+    let cho = 100;
+    for (let lan = 0; lan < 4; lan++) {
+      const r = await fetch(`${DATA_API_BASE}/api/v1/queries/${encodeURIComponent(qid)}/next`, { headers: H });
+      if (r.ok) { const txt = await r.text(); return txt ? JSON.parse(txt) : {}; }
+      const txt = (await r.text()).slice(0, 300);
+      if (r.status === 503 || r.status === 409) { await ngu(cho); cho *= 2; continue; }
+      if (r.status === 410) throw new Error("data_api_410_query_het_han: " + txt);
+      throw new Error(`data_api_${r.status}: ${txt}`);
+    }
+    throw new Error("data_api_503_thu_lai_4_lan_van_ban");
+  };
+
+  let cols = [];
+  const napCols = (r) => {
+    const s = (r?.schema || []).map((c) => (typeof c === "string" ? c : c?.name)).filter(Boolean);
+    if (s.length) cols = s;
+  };
+
+  let res = await post();
+  const qid = res.queryId;
+  napCols(res);
+  const gom = [...(res.rows || [])];
+
+  let soLanPoll = 0;
+  while (res.hasMore && qid && soLanPoll < 2000) {
+    const dangTinh = !(res.rows || []).length;
+    await ngu(dangTinh ? 10_000 : 150);
+    soLanPoll++;
+    res = await next(qid);
+    napCols(res);
+    gom.push(...(res.rows || []));
+  }
+
+  const kieuMang = gom.length > 0 && Array.isArray(gom[0]);
+  if (kieuMang && !cols.length) {
+    throw new Error(`data_api_khong_co_schema: nhận ${gom.length} dòng kiểu mảng nhưng không có tên cột`);
+  }
+  return gom.map((r) => (Array.isArray(r) ? Object.fromEntries(cols.map((c, i) => [c, r[i]])) : r));
+}
 
 // ---------- Google Sheets: lấy access token từ service account ----------
 let cachedToken = null;
@@ -207,42 +279,36 @@ const normTime = (s) => {
 // CÁC BƯỚC NẠP
 // ============================================================
 
+// Số thô từ Data API (JSON number hoặc chuỗi số thuần) — KHÔNG dùng num() ở dưới
+// cho lat/lng: num() có bước bóc dấu "." ngăn cách nghìn kiểu Sheet VN, dễ ăn
+// nhầm toạ độ dạng "10.777" (đúng 3 số lẻ) thành 10777. Data API trả số thật,
+// không có dấu ngăn cách nghìn, nên parse thẳng là đủ và an toàn hơn.
+const soDataApi = (v) => {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(v);
+  return Number.isFinite(n) ? n : null;
+};
+
 async function importWarehouses() {
-  console.log("\n▸ Kho / bưu cục + toạ độ");
-  const grid = await readGrid(WAREHOUSE_GEO_SHEET_ID, WAREHOUSE_GEO_GID);
-  const H = grid[0] || [];
-  const c = {
-    id: findCol(H, ["warehouse_id", "ma kho"]),
-    name: findCol(H, ["warehouse_name", "ten kho"]),
-    district: findCol(H, ["district_name", "quan huyen"]),
-    province: findCol(H, ["province_name", "tinh"]),
-    lat: findCol(H, ["latitude", "lat"]),
-    lng: findCol(H, ["longitude", "lng", "long"]),
-  };
+  console.log("\n▸ Kho / bưu cục + toạ độ (Data API — iceberg.dwh.dim_warehouse)");
+  const raw = await dataApiQuery(
+    "SELECT warehouse_id, warehouse_name, latitude, longitude FROM iceberg.dwh.dim_warehouse"
+  );
   const seen = new Set();
   const rows = [];
-  for (const r of grid.slice(1)) {
-    const name = cell(r, c.name);
-    if (!name) continue;
-    const wid = cell(r, c.id) || null;
-    const key = wid || name.toLowerCase();
-    if (seen.has(key)) continue;      // sheet toàn quốc có dòng lặp
-    seen.add(key);
+  for (const r of raw) {
+    const wid = r.warehouse_id === null || r.warehouse_id === undefined ? null : String(r.warehouse_id).trim();
+    const name = String(r.warehouse_name || "").trim();
+    if (!wid || !name) continue;
+    if (seen.has(wid)) continue;      // đề phòng Data API trả trùng dòng
+    seen.add(wid);
     rows.push({
       warehouse_id: wid, name,
-      district_name: cell(r, c.district) || null,
-      province_name: cell(r, c.province) || null,
-      lat: num(cell(r, c.lat)), lng: num(cell(r, c.lng)),
+      lat: soDataApi(r.latitude), lng: soDataApi(r.longitude),
     });
   }
   console.log(`   đọc ${rows.length} kho`);
-  // warehouse_id có thể null -> chỉ upsert nhóm có mã, nhóm còn lại chèn mới nếu chưa có.
-  await sbWrite("warehouses", rows.filter((x) => x.warehouse_id), "warehouse_id");
-  const noId = rows.filter((x) => !x.warehouse_id);
-  if (noId.length) {
-    const have = new Set((await sbSelect("warehouses", "select=name")).map((x) => x.name));
-    await sbWrite("warehouses", noId.filter((x) => !have.has(x.name)));
-  }
+  await sbWrite("warehouses", rows, "warehouse_id");
   return rows.length;
 }
 
