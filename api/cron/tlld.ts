@@ -119,9 +119,9 @@ export default async function handler(req: Request): Promise<Response> {
 
   const batDau = Date.now();
   try {
-    const rows = await layTlld(token, tu, den);
+    const { rows, quotaConLai, soLanPoll } = await layTlld(token, tu, den);
     if (!rows.length) {
-      return json({ ok: true, tu, den, doc: 0, ghi: 0, note: "khong_co_du_lieu" });
+      return json({ ok: true, tu, den, doc: 0, ghi: 0, quota_con_lai: quotaConLai, note: "khong_co_du_lieu" });
     }
     const soGhi = await ghi(rows.map(sangDongDb), env);
 
@@ -132,6 +132,10 @@ export default async function handler(req: Request): Promise<Response> {
       ok: true, tu, den,
       doc: rows.length, ghi: soGhi, so_chuyen: chuyen,
       thieu_ma_tuyen: thieuMaTuyen,
+      // Quota Data API tính theo số lần POST /queries mỗi ngày (mặc định 200,
+      // có token bị đặt xuống 50). Nạp lịch sử mà không nhìn số này là dễ cụt giữa chừng.
+      quota_con_lai: quotaConLai,
+      so_lan_poll: soLanPoll,
       giay: Math.round((Date.now() - batDau) / 1000),
     });
   } catch (e: any) {

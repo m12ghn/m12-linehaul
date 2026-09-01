@@ -34,8 +34,10 @@ WITH
 -- Chọn chuyến theo date(first_check_in), KHÔNG theo load_date.
 -- load_date là ngày bản ghi được chạm lần cuối, không phải ngày chuyến chạy —
 -- đã kiểm chứng: chuyến E2608231HDJ88WW chạy 23/08 nhưng load_date ghi 30/08.
--- ĐÃ CHỐT: dùng thẳng date(), không đổi múi giờ. Nếu sau này thấy số lệch đúng
--- một ngày thì đây là chỗ đầu tiên cần nhìn.
+--
+-- KHÔNG đổi múi giờ, và đây là chủ ý: tài liệu Data API nội bộ ghi rõ mốc thời
+-- gian bên này "nhãn Z nhưng đã là giờ VN" (khác TruckAir MCP — bên đó UTC thật).
+-- Thêm AT TIME ZONE vào là lệch đi 7 tiếng theo chiều ngược lại.
 qualifying_trips AS (
   SELECT DISTINCT code
   FROM "ghn-reporting"."fa"."dtm_logistics_trip_detail"
@@ -230,33 +232,88 @@ export interface TlldRow {
   tlld_weight_chuyen: number | null; tlld_vol_chuyen: number | null;
 }
 
-/** Gọi Data API, đi hết các batch, trả về mảng object theo tên cột. */
-export async function layTlld(token: string, tuNgay: string, denNgay: string): Promise<TlldRow[]> {
-  const goi = async (path: string, body?: unknown): Promise<any> => {
-    const r = await fetch(BASE() + path, {
-      method: body === undefined ? "GET" : "POST",
-      headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
+const ngu = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export interface KetQuaTlld {
+  rows: TlldRow[];
+  /** Số lần POST /queries còn lại trong ngày, đọc từ header X-Quota-Remaining. */
+  quotaConLai: number | null;
+  soLanPoll: number;
+}
+
+/* ------------------------------------------------------------------
+   Gọi Data API theo đúng luật trong tài liệu nội bộ (GHN Data API guide):
+
+     • POST /queries chỉ trả queryId, rows thường RỖNG. Dữ liệu lấy qua /next.
+     • Tín hiệu lặp là `hasMore`, KHÔNG phải `status`.
+     • rows rỗng + hasMore -> query ĐANG TÍNH, chờ ~10s rồi mới hỏi tiếp.
+       Hỏi dồn thì ăn 429/409 chứ không nhanh hơn.
+     • 503 pod_busy / 409 conflict -> thử lại ĐÚNG cái /next đó, backoff
+       100→200→400ms. An toàn vì /next lỗi không nhích con trỏ, không sót
+       không trùng dòng.
+     • 410 query_expired -> dừng lâu quá, phải gửi lại từ đầu.
+     • QUOTA tính theo số POST /queries mỗi ngày (mặc định 200, có token bị đặt
+       xuống 50), reset 00:00 UTC. /next KHÔNG tốn quota -> gom nhiều ngày vào
+       MỘT lời gọi luôn rẻ hơn chia nhỏ.
+   ------------------------------------------------------------------ */
+export async function layTlld(token: string, tuNgay: string, denNgay: string): Promise<KetQuaTlld> {
+  const H = { authorization: "Bearer " + token, "content-type": "application/json" };
+  let quotaConLai: number | null = null;
+
+  const post = async (): Promise<any> => {
+    const r = await fetch(BASE() + "/api/v1/queries", {
+      method: "POST", headers: H,
+      // JSON.stringify tự escape dấu " trong SQL (catalog "ghn-reporting") —
+      // đây là chỗ tài liệu cảnh báo hay hỏng nếu tự ghép chuỗi.
+      body: JSON.stringify({ sql: tlldSql(tuNgay, denNgay) }),
     });
+    const q = r.headers.get("x-quota-remaining");
+    if (q !== null && q !== "") quotaConLai = Number(q);
     const txt = await r.text();
     if (!r.ok) throw new Error(`data_api_${r.status}: ${txt.slice(0, 300)}`);
     return txt ? JSON.parse(txt) : {};
   };
 
-  let res = await goi("/api/v1/queries", { sql: tlldSql(tuNgay, denNgay) });
+  /** Một lần /next, có thử lại cho lỗi tạm. Trả null nếu hết đường. */
+  const next = async (qid: string): Promise<any> => {
+    let cho = 100;
+    for (let lan = 0; lan < 4; lan++) {
+      const r = await fetch(`${BASE()}/api/v1/queries/${encodeURIComponent(qid)}/next`, { headers: H });
+      if (r.ok) {
+        const txt = await r.text();
+        return txt ? JSON.parse(txt) : {};
+      }
+      const txt = (await r.text()).slice(0, 300);
+      // Lỗi tạm -> thử lại đúng cái /next này.
+      if (r.status === 503 || r.status === 409) {
+        await ngu(cho); cho *= 2; continue;
+      }
+      if (r.status === 410) throw new Error(`data_api_410_query_het_han: ${txt}`);
+      throw new Error(`data_api_${r.status}: ${txt}`);
+    }
+    throw new Error("data_api_503_thu_lai_4_lan_van_ban");
+  };
+
+  let res = await post();
+  const qid: string = res.queryId;
   const cols: string[] = (res.schema || []).map((c: any) => (typeof c === "string" ? c : c?.name));
   const gom: any[] = [...(res.rows || [])];
 
-  // hasMore -> còn batch. Chặn vòng lặp vô hạn nếu API trả hasMore mãi.
-  let vong = 0;
-  while (res.hasMore && res.queryId && vong < 500) {
-    vong++;
-    res = await goi(`/api/v1/queries/${encodeURIComponent(res.queryId)}/next`);
+  let soLanPoll = 0;
+  while (res.hasMore && qid && soLanPoll < 2000) {
+    // Chưa có dòng nào mà vẫn hasMore = kho đang tính. Chờ hẳn 10 giây theo
+    // tài liệu; hỏi dồn chỉ tốn rate-limit chứ không làm nó xong nhanh hơn.
+    const dangTinh = !(res.rows || []).length;
+    await ngu(dangTinh ? 10_000 : 150);
+    soLanPoll++;
+    res = await next(qid);
     gom.push(...(res.rows || []));
   }
 
   // API có thể trả mảng theo thứ tự cột, hoặc trả sẵn object — chịu cả hai.
-  return gom.map((r: any) =>
+  const rows = gom.map((r: any) =>
     Array.isArray(r) ? Object.fromEntries(cols.map((c, i) => [c, r[i]])) : r
   ) as TlldRow[];
+
+  return { rows, quotaConLai, soLanPoll };
 }
