@@ -8,7 +8,12 @@
    giảm hẳn lý do họ quay lại nhập trên Sheet.
    Không muốn thì xoá mục "crons" trong vercel.json, nút bấm tay vẫn chạy bình thường.
 
-   Biến môi trường: CRON_SECRET (Vercel tự sinh khi bạn khai báo crons), EXPORT_SHEET_ID.
+   Biến môi trường: CRON_SECRET, EXPORT_SHEET_ID.
+   ⚠ CRON_SECRET Vercel KHÔNG tự sinh — phải tự tạo trong Settings → Environment
+     Variables, rồi Vercel mới lấy giá trị đó gắn vào header Authorization khi gọi
+     cron. Thiếu nó thì cron chạy đều nhưng lần nào cũng bị chính endpoint này trả
+     401, mà cron lỗi thì im lặng nên không ai biết (đã xảy ra: 401 mỗi 15 phút
+     suốt từ lúc deploy).
    ============================================================ */
 import { select, json } from "./../_lib/supabase";
 import { exportRegion, sheetsToken } from "./../_lib/exportSheet";

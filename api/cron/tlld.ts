@@ -18,7 +18,9 @@
    được khi lỗi, biết lần cuối chạy lúc nào.
 
    Biến môi trường:
-     CRON_SECRET      Vercel tự sinh khi khai báo crons
+     CRON_SECRET      TỰ TẠO trong Settings → Environment Variables (Vercel KHÔNG
+                      tự sinh). Vercel lấy giá trị này gắn vào header Authorization
+                      khi gọi cron; thiếu thì cron chạy nhưng luôn bị trả 401.
      DATA_API_TOKEN   token Bearer của Data API — NHẬP TAY trên Vercel
    ============================================================ */
 // ⚠ PHẢI ghi đuôi .js — đây là file DUY NHẤT trong api/ chạy trên Node runtime.
