@@ -160,7 +160,12 @@ trip_agg AS (
     MAX(std_weight) AS std_weight,
     MAX(std_orders) AS std_orders
   FROM legs GROUP BY code
-),
+)
+-- (Hết danh sách CTE — KHÔNG còn dấu phẩy sau trip_agg: đây từng là CTE áp
+-- chót khi còn route_of_trip theo sau, patch bỏ route_of_trip nhưng sót dấu
+-- phẩy, khiến Trino chờ thêm 1 CTE nữa mà gặp ngay SELECT -> vỡ TOÀN BỘ câu
+-- (mọi lượt nạp/backfill lỗi data_api_400 "mismatched input 'SELECT'"). Phát
+-- hiện 01/09 tối khi chạy backfill thật trên production.
 
 -- MÃ TUYẾN = scheduler_name (đúng cột đã thăm dò ở tlld-probe.py "Câu hỏi 1").
 -- 01/09: từng đổi sang lấy route_code ở dtm_logistics_trip_filledrate (arbitrary(),
