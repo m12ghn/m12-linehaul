@@ -30,7 +30,7 @@
 // Viết .js chứ không phải .ts vì đây là tên file SAU KHI biên dịch.
 // Bỏ đuôi ra là chết ngay lúc gọi: ERR_MODULE_NOT_FOUND -> FUNCTION_INVOCATION_FAILED
 // (đã dính thật, lần chạy thử đầu tiên).
-import { json, select } from "./../_lib/supabase.js";
+import { select } from "./../_lib/supabase.js";
 import { layTlld, type TlldRow } from "./../_lib/tlldQuery.js";
 
 // CHẠY TRÊN NODE, KHÔNG PHẢI EDGE — và đây là chỗ dễ vấp:
@@ -116,22 +116,42 @@ async function ghi(rows: Record<string, unknown>[], env: any): Promise<number> {
 
 const ngayISO = (d: Date) => d.toISOString().slice(0, 10);
 
-export default async function handler(req: Request): Promise<Response> {
+/* ⚠ CHỮ KÝ HANDLER KIỂU NODE, KHÔNG PHẢI KIỂU WEB.
+   Node runtime của Vercel truyền vào (req, res) kiểu http cũ — KHÔNG phải
+   Request/Response chuẩn web như Edge. Viết theo kiểu web thì chết ngay dòng
+   đầu: "TypeError: req.headers.get is not a function" -> FUNCTION_INVOCATION_FAILED
+   (đã dính thật). Vì vậy file này cũng không dùng được json() của _lib/supabase
+   — hàm đó trả về Response, chỉ hợp với Edge. Dùng tra() bên dưới. */
+type NodeReq = { url?: string; headers: Record<string, string | string[] | undefined> };
+type NodeRes = {
+  statusCode: number;
+  setHeader(k: string, v: string): void;
+  end(body?: string): void;
+};
+
+function tra(res: NodeRes, obj: unknown, status = 200): void {
+  res.statusCode = status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
+  res.end(JSON.stringify(obj));
+}
+
+export default async function handler(req: NodeReq, res: NodeRes): Promise<void> {
   const env = (globalThis as any).process?.env || {};
 
   const secret = env.CRON_SECRET;
-  const auth = req.headers.get("authorization") || "";
-  if (!secret || auth !== "Bearer " + secret) return json({ error: "unauthorized" }, 401);
+  const h = req.headers.authorization;
+  const auth = Array.isArray(h) ? h[0] || "" : h || "";
+  if (!secret || auth !== "Bearer " + secret) return tra(res, { error: "unauthorized" }, 401);
 
   const token = env.DATA_API_TOKEN;
-  if (!token) return json({ error: "thieu_DATA_API_TOKEN" }, 500);
+  if (!token) return tra(res, { error: "thieu_DATA_API_TOKEN" }, 500);
 
-  // Mặc định: hôm qua. TLLD là số của ngày N-1, chạy sáng sớm là vừa.
-  const u = new URL(req.url);
+  // req.url ở Node chỉ có đường dẫn + query, không có host -> phải ghép base giả.
+  const u = new URL(req.url || "/", "http://localhost");
   const homQua = new Date(Date.now() - 86_400_000);
   const tu = u.searchParams.get("tu") || ngayISO(homQua);
   const den = u.searchParams.get("den") || ngayISO(new Date(Date.parse(tu) + 86_400_000));
-
   const force = u.searchParams.get("force") === "1";
 
   // ── RÀO TIẾT KIỆM QUOTA ─────────────────────────────────────
@@ -140,20 +160,17 @@ export default async function handler(req: Request): Promise<Response> {
   // tổng 200/ngày (có token chỉ 50).
   // Gặp dữ liệu đã nạp trong vòng 12 tiếng thì bỏ qua — chặn mấy lần bấm lại,
   // cron chạy trùng, hay chạy nạp lịch sử đè lên khoảng đã xong.
-  // Muốn nạp lại thật thì thêm &force=1.
   if (!force) {
     try {
       const daCo = await select<{ ngay: string; updated_at: string }>("tlld_daily", {
         select: "ngay,updated_at",
-        // Gói cả 2 vế vào một `and=(...)` cho rõ ràng — trộn điều kiện thường
-        // với and=() dễ ra kết quả không như mình nghĩ.
         filter: { and: `(ngay.gte.${tu},ngay.lt.${den})` },
         order: "updated_at.desc",
         limit: 1,
       });
       const moiNhat = daCo[0]?.updated_at ? Date.parse(daCo[0].updated_at) : 0;
       if (moiNhat && Date.now() - moiNhat < 12 * 3_600_000) {
-        return json({
+        return tra(res, {
           ok: true, tu, den, bo_qua: true,
           ly_do: "da_nap_trong_12_gio",
           nap_luc: daCo[0].updated_at,
@@ -169,14 +186,13 @@ export default async function handler(req: Request): Promise<Response> {
   try {
     const { rows, quotaConLai, soLanPoll } = await layTlld(token, tu, den);
     if (!rows.length) {
-      return json({ ok: true, tu, den, doc: 0, ghi: 0, quota_con_lai: quotaConLai, note: "khong_co_du_lieu" });
+      return tra(res, { ok: true, tu, den, doc: 0, ghi: 0, quota_con_lai: quotaConLai, note: "khong_co_du_lieu" });
     }
     const soGhi = await ghi(rows.map(sangDongDb), env);
 
-    // Vài con số để nhìn log là biết chạy có ra hồn không.
     const chuyen = new Set(rows.map((r) => r.ma_chuyen)).size;
     const thieuMaTuyen = rows.filter((r) => !r.ma_tuyen).length;
-    return json({
+    return tra(res, {
       ok: true, tu, den,
       doc: rows.length, ghi: soGhi, so_chuyen: chuyen,
       thieu_ma_tuyen: thieuMaTuyen,
@@ -187,6 +203,6 @@ export default async function handler(req: Request): Promise<Response> {
       giay: Math.round((Date.now() - batDau) / 1000),
     });
   } catch (e: any) {
-    return json({ error: "loi_nap_tlld", detail: String(e?.message || e), tu, den }, 500);
+    return tra(res, { error: "loi_nap_tlld", detail: String(e?.message || e), tu, den }, 500);
   }
 }
