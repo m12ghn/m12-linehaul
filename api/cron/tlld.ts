@@ -31,7 +31,7 @@
 // Bỏ đuôi ra là chết ngay lúc gọi: ERR_MODULE_NOT_FOUND -> FUNCTION_INVOCATION_FAILED
 // (đã dính thật, lần chạy thử đầu tiên).
 import { select } from "./../_lib/supabase.js";
-import { layTlld, type TlldRow } from "./../_lib/tlldQuery.js";
+import { layTlld, chayQuery, khoSql, M12_WAREHOUSE_IDS, type TlldRow } from "./../_lib/tlldQuery.js";
 
 // CHẠY TRÊN NODE, KHÔNG PHẢI EDGE — và đây là chỗ dễ vấp:
 // Edge runtime chỉ cho ~25 giây rồi cắt. Một câu Trino quét một ngày mất
@@ -169,6 +169,28 @@ export default async function handler(req: NodeReq, res: NodeRes): Promise<void>
   const tu = u.searchParams.get("tu") || ngayISO(homQua);
   const den = u.searchParams.get("den") || ngayISO(new Date(Date.parse(tu) + 86_400_000));
   const force = u.searchParams.get("force") === "1";
+
+  // CHẾ ĐỘ KIỂM TRA KHO: ?che_do=kho — chỉ đọc, KHÔNG ghi gì vào Supabase.
+  // Đối chiếu 2 cách lọc (theo warehouse_id vs theo tên kho) xem có ra cùng một
+  // tập không, để biết danh sách 5 id có đang bỏ sót kho nào.
+  if (u.searchParams.get("che_do") === "kho") {
+    try {
+      const { rows, quotaConLai } = await chayQuery(token, khoSql(tu, den));
+      const thieuId = rows.filter((r: any) => !r.trong_danh_sach_id);
+      return tra(res, {
+        ok: true, tu, den, che_do: "kho",
+        id_dang_dung: M12_WAREHOUSE_IDS,
+        so_cap_kho: rows.length,
+        canh_bao: thieuId.length
+          ? `${thieuId.length} kho khớp TÊN nhưng warehouse_id KHÔNG nằm trong danh sách -> đang bỏ sót`
+          : "mọi kho khớp tên đều đã nằm trong danh sách id",
+        kho: rows,
+        quota_con_lai: quotaConLai,
+      });
+    } catch (e: any) {
+      return tra(res, { error: "loi_kiem_tra_kho", detail: String(e?.message || e) }, 500);
+    }
+  }
 
   // ── RÀO TIẾT KIỆM QUOTA ─────────────────────────────────────
   // Đếm trước trong Supabase xem khoảng ngày này đã có dữ liệu chưa. Phép đếm

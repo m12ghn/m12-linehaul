@@ -222,6 +222,48 @@ function ngayHopLe(s: string): void {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) throw new Error("ngay_khong_hop_le:" + s);
 }
 
+/* ------------------------------------------------------------------
+   CHẾ ĐỘ KIỂM TRA KHO — không ghi gì, chỉ để trả lời một câu hỏi:
+   lọc theo warehouse_id và lọc theo tên kho có ra CÙNG một tập không?
+
+   Vì sao cần hỏi: câu đang chạy lọc bằng 5 warehouse_id. Nếu một hub thực tế
+   ứng với NHIỀU warehouse_id (nhiều cửa, nhiều điểm nhận) thì cách đó đang bỏ
+   sót chuyến — mà bỏ sót thì im lặng, không ai biết.
+
+   Câu này lấy hợp của cả hai cách lọc rồi liệt kê từng cặp (id, tên) kèm số
+   dòng. Nhìn kết quả là biết ngay:
+     • id nằm trong danh sách mà tên lạ  -> danh sách id sai
+     • tên khớp mà id ngoài danh sách    -> đang bỏ sót, phải bổ sung id
+   ------------------------------------------------------------------ */
+export function khoSql(tuNgay: string, denNgay: string): string {
+  ngayHopLe(tuNgay);
+  ngayHopLe(denNgay);
+  return `
+SELECT
+  warehouse_id,
+  stoppoint_name,
+  COUNT(*)                  AS so_dong,
+  COUNT(DISTINCT code)      AS so_chuyen,
+  CASE WHEN warehouse_id IN (${M12_WAREHOUSE_IDS.join(", ")})
+       THEN true ELSE false END AS trong_danh_sach_id
+FROM "ghn-reporting"."fa"."dtm_logistics_trip_detail"
+WHERE date(first_check_in) >= DATE '${tuNgay}'
+  AND date(first_check_in) <  DATE '${denNgay}'
+  AND (
+    warehouse_id IN (${M12_WAREHOUSE_IDS.join(", ")})
+    OR stoppoint_name IN (
+      'Kho Chuyển Tiếp Sóng Thần-Bình Dương',
+      'Kho Giao Hàng Nặng - Tân Tạo - HCM',
+      'Kho Giao Hàng Nặng - Tân Thuận - HCM'
+    )
+    OR stoppoint_name LIKE '%Hồ Chí Minh 01%'
+    OR stoppoint_name LIKE '%Hồ Chí Minh 20%'
+  )
+GROUP BY warehouse_id, stoppoint_name
+ORDER BY so_chuyen DESC
+`.trim();
+}
+
 export interface TlldRow {
   ngay: string; ma_chuyen: string; ma_tuyen: string | null;
   loai_lich: string | null; loai_tai: string | null; hub: string | null;
@@ -261,7 +303,12 @@ export interface KetQuaTlld {
        xuống 50), reset 00:00 UTC. /next KHÔNG tốn quota -> gom nhiều ngày vào
        MỘT lời gọi luôn rẻ hơn chia nhỏ.
    ------------------------------------------------------------------ */
-export async function layTlld(token: string, tuNgay: string, denNgay: string): Promise<KetQuaTlld> {
+export function layTlld(token: string, tuNgay: string, denNgay: string): Promise<KetQuaTlld> {
+  return chayQuery(token, tlldSql(tuNgay, denNgay)) as Promise<KetQuaTlld>;
+}
+
+/** Chạy một câu SQL bất kỳ qua Data API, đi hết các batch. */
+export async function chayQuery(token: string, sql: string): Promise<{ rows: any[]; quotaConLai: number | null; soLanPoll: number }> {
   const H = { authorization: "Bearer " + token, "content-type": "application/json" };
   let quotaConLai: number | null = null;
 
@@ -270,7 +317,7 @@ export async function layTlld(token: string, tuNgay: string, denNgay: string): P
       method: "POST", headers: H,
       // JSON.stringify tự escape dấu " trong SQL (catalog "ghn-reporting") —
       // đây là chỗ tài liệu cảnh báo hay hỏng nếu tự ghép chuỗi.
-      body: JSON.stringify({ sql: tlldSql(tuNgay, denNgay) }),
+      body: JSON.stringify({ sql }),
     });
     const q = r.headers.get("x-quota-remaining");
     if (q !== null && q !== "") quotaConLai = Number(q);
@@ -338,18 +385,21 @@ export async function layTlld(token: string, tuNgay: string, denNgay: string): P
       `trả về tên cột nào -> không ánh xạ được. Kiểm tra lại trường "schema" trong phản hồi.`,
     );
   }
-  const rows = gom.map((r: any) =>
+  const rows: any[] = gom.map((r: any) =>
     Array.isArray(r) ? Object.fromEntries(cols.map((c, i) => [c, r[i]])) : r
-  ) as TlldRow[];
+  );
 
-  // Chốt chặn: mọi dòng phải có ngày và mã chuyến, đó là khoá của bảng. Thiếu
-  // là ánh xạ sai chứ không phải dữ liệu thiếu — dừng ngay, đừng ghi rác.
-  const hong = rows.filter((r) => !r?.ngay || !r?.ma_chuyen).length;
-  if (hong) {
-    throw new Error(
-      `du_lieu_khong_hop_le: ${hong}/${rows.length} dòng thiếu ngay hoặc ma_chuyen. ` +
-      `Tên cột nhận được: ${cols.join(", ") || "(rỗng)"}`,
-    );
+  // Chốt chặn CHỈ cho câu TLLD: mọi dòng phải có ngày và mã chuyến, đó là khoá
+  // của bảng. Thiếu là ánh xạ sai chứ không phải dữ liệu thiếu — dừng, đừng ghi rác.
+  // Câu kiểm tra kho không có 2 cột này nên bỏ qua.
+  if (cols.includes("ngay") && cols.includes("ma_chuyen")) {
+    const hong = rows.filter((r) => !r?.ngay || !r?.ma_chuyen).length;
+    if (hong) {
+      throw new Error(
+        `du_lieu_khong_hop_le: ${hong}/${rows.length} dòng thiếu ngay hoặc ma_chuyen. ` +
+        `Tên cột nhận được: ${cols.join(", ") || "(rỗng)"}`,
+      );
+    }
   }
 
   return { rows, quotaConLai, soLanPoll };
