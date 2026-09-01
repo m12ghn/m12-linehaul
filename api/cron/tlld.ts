@@ -30,7 +30,7 @@
 // Viết .js chứ không phải .ts vì đây là tên file SAU KHI biên dịch.
 // Bỏ đuôi ra là chết ngay lúc gọi: ERR_MODULE_NOT_FOUND -> FUNCTION_INVOCATION_FAILED
 // (đã dính thật, lần chạy thử đầu tiên).
-import { select } from "./../_lib/supabase.js";
+import { select, selectAll } from "./../_lib/supabase.js";
 import { layTlld, chayQuery, khoSql, M12_WAREHOUSE_IDS, type TlldRow } from "./../_lib/tlldQuery.js";
 
 // CHẠY TRÊN NODE, KHÔNG PHẢI EDGE — và đây là chỗ dễ vấp:
@@ -189,6 +189,74 @@ export default async function handler(req: NodeReq, res: NodeRes): Promise<void>
       });
     } catch (e: any) {
       return tra(res, { error: "loi_kiem_tra_kho", detail: String(e?.message || e) }, 500);
+    }
+  }
+
+  // CHẾ ĐỘ KIỂM TRA CHIỀU: ?che_do=chieu — chỉ đọc THẲNG Supabase (không đụng
+  // Data API, không tốn quota). Kiểm tra thực nghiệm giả định của view
+  // m12.tlld_trip (0005): mỗi chuyến chọn ĐIỂM DỪNG ĐẦU TIÊN (thu_tu nhỏ nhất)
+  // làm đại diện. Giả định cần đúng 2 điều:
+  //   1. tlld_weight_chuyen/tlld_vol_chuyen GIỐNG NHAU ở mọi điểm dừng cùng
+  //      chuyến (đây là số CẢ CHUYẾN, không phải số TẠI ĐIỂM) -> lấy điểm nào
+  //      cũng ra cùng kết quả.
+  //   2. loai_tai (Xuất/Nhập) có ĐỔI dọc theo các điểm dừng không, và điểm ĐẦU
+  //      có phải là lựa chọn hợp lý cho "chiều của cả chuyến" không.
+  // Sai giả định 1 thì view cho số SAI (không phải chỉ chọn nhầm dòng).
+  // Sai giả định 2 thì chỉ ảnh hưởng phân loại Xuất/Nhập, số TLLD vẫn đúng.
+  if (u.searchParams.get("che_do") === "chieu") {
+    try {
+      type DongTho = {
+        ngay: string; ma_chuyen: string; thu_tu: number; loai_tai: string | null;
+        tlld_weight_chuyen: number | null; tlld_vol_chuyen: number | null;
+      };
+      const rows = await selectAll<DongTho>("tlld_daily", {
+        select: "ngay,ma_chuyen,thu_tu,loai_tai,tlld_weight_chuyen,tlld_vol_chuyen",
+        filter: { and: `(ngay.gte.${tu},ngay.lt.${den})` },
+        order: "ma_chuyen.asc,thu_tu.asc",
+      });
+      const theoChuyen = new Map<string, DongTho[]>();
+      for (const r of rows) {
+        const k = `${r.ngay}|${r.ma_chuyen}`;
+        let ds = theoChuyen.get(k);
+        if (!ds) { ds = []; theoChuyen.set(k, ds); }
+        ds.push(r);
+      }
+      let doiChieu = 0; // số chuyến có >1 giá trị loai_tai khác nhau giữa các điểm dừng
+      let lechSoChuyen = 0; // số chuyến có tlld_weight_chuyen KHÔNG giống nhau giữa các điểm dừng (đáng lo)
+      const viDuDoiChieu: unknown[] = [];
+      const viDuLech: unknown[] = [];
+      for (const [k, ds] of theoChuyen) {
+        const chieu = new Set(ds.map((d) => d.loai_tai ?? "(trống)"));
+        if (chieu.size > 1) {
+          doiChieu++;
+          if (viDuDoiChieu.length < 5) {
+            viDuDoiChieu.push({ chuyen: k, diem_dung: ds.map((d) => ({ thu_tu: d.thu_tu, loai_tai: d.loai_tai })) });
+          }
+        }
+        const w = ds.map((d) => d.tlld_weight_chuyen).filter((v): v is number => v != null);
+        if (w.length > 1 && Math.max(...w) - Math.min(...w) > 0.0001) {
+          lechSoChuyen++;
+          if (viDuLech.length < 5) {
+            viDuLech.push({ chuyen: k, cac_gia_tri: ds.map((d) => ({ thu_tu: d.thu_tu, tlld_weight_chuyen: d.tlld_weight_chuyen })) });
+          }
+        }
+      }
+      return tra(res, {
+        ok: true, tu, den, che_do: "chieu",
+        so_diem_dung: rows.length,
+        so_chuyen: theoChuyen.size,
+        chuyen_doi_chieu_giua_cac_diem: doiChieu,
+        vi_du_doi_chieu: viDuDoiChieu,
+        chuyen_lech_so_ca_chuyen: lechSoChuyen,
+        vi_du_lech_so: viDuLech,
+        ket_luan: lechSoChuyen > 0
+          ? "⚠ CÓ chuyến lệch số cả-chuyến giữa các điểm dừng -> view tlld_trip (0005) đang lấy SỐ SAI cho những chuyến này, cần xem lại SQL tính tlld_weight_chuyen."
+          : (doiChieu > 0
+            ? "Số cả-chuyến nhất quán (an toàn) — nhưng loai_tai có đổi giữa các điểm dừng ở " + doiChieu + " chuyến. View đang lấy loai_tai của điểm ĐẦU, xem vi_du_doi_chieu để đánh giá có hợp lý không."
+            : "Cả 2 giả định đều đúng trên dữ liệu này: số cả-chuyến nhất quán, loai_tai không đổi trong 1 chuyến."),
+      });
+    } catch (e: any) {
+      return tra(res, { error: "loi_kiem_tra_chieu", detail: String(e?.message || e) }, 500);
     }
   }
 

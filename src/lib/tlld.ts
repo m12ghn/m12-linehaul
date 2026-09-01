@@ -1,12 +1,18 @@
 /* ============================================================
-   Đọc dữ liệu TLLD (tỷ lệ lấp đầy theo khối lượng) từ 4 tab hub,
+   Đọc dữ liệu TLLD (tỷ lệ lấp đầy theo khối lượng) từ Supabase
+   (api/tlld-live -> view m12.tlld_trip, một dòng mỗi CHUYẾN, xem 0005),
    gộp theo MÃ TUYẾN -> tính:
    - n1   : tỷ lệ lấp đầy ngày gần nhất (N-1)
    - avg7 : trung bình 7 ngày gần nhất
    - series: 7 điểm theo ngày (để vẽ sparkline)
+
+   TRƯỚC 01/09/2026: đọc thẳng 4 tab CSV của workbook TLLD trên Google Sheet
+   (mỗi tab 1 hub, ~17MB, phải tự đoán cột qua findCol()). Giờ nguồn thật là
+   Data API (Trino) -> cron nạp vào Supabase -> đọc qua 1 endpoint JSON duy
+   nhất, có tên cột rõ ràng, không cần đoán/parse CSV nữa. Toàn bộ phép tính
+   BÊN DƯỚI (avg7, cuốn chiếu, tuần lịch...) giữ NGUYÊN không đổi — chỉ đổi
+   phần nạp dữ liệu đầu vào.
    ============================================================ */
-import { parseCSV, findCol } from "./csv";
-import { TLLD_TABS, tlldCsvSources } from "../config";
 import { fetchWithTimeout } from "./fetchTimeout";
 
 /** ISO yyyy-mm-dd rơi vào T7 (6) hoặc CN (0)? */
@@ -21,27 +27,6 @@ export function normCode(s: string): string {
   return (s || "").trim().toUpperCase().replace(/\s+/g, "");
 }
 
-/** "57%" | "0.6966" | "1.0069" -> phân số (0..>1). null nếu trống/không hợp lệ. */
-function parseFill(s: string): number | null {
-  const t = (s || "").trim();
-  if (!t) return null;
-  if (t.endsWith("%")) {
-    const v = parseFloat(t.slice(0, -1).replace(",", "."));
-    return isNaN(v) ? null : v / 100;
-  }
-  const v = parseFloat(t.replace(",", "."));
-  return isNaN(v) ? null : v;
-}
-
-/** "2026-06-23" | "6/15/2026" -> "YYYY-MM-DD". null nếu không nhận dạng được. */
-function parseDate(s: string): string | null {
-  const t = (s || "").trim();
-  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-  m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (m) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
-  return null;
-}
 
 export interface TlldRoute {
   n1: number | null; // lấp đầy ngày gần nhất
@@ -133,24 +118,34 @@ export interface TlldIndex {
   lastSync: number;
 }
 
-async function fetchTab(gid: string, signal?: AbortSignal): Promise<string | null> {
-  for (const base of tlldCsvSources(gid)) {
-    try {
-      // Timeout dài hơn mặc định (25s thay vì 12s) — tab HCM01/HCM20 ~17MB, tải chậm nhưng
-      // ĐANG CHẠY vẫn cần đủ thời gian, chỉ cắt khi thật sự treo (Google trả trang đăng nhập/lỗi).
-      const res = await fetchWithTimeout(base + "&_=" + Date.now(), { cache: "no-store", signal }, 25000);
-      if (!res.ok) continue;
-      const text = await res.text();
-      if (text.trim().length > 5) return text;
-    } catch {
-      /* thử nguồn tiếp theo */
-    }
-  }
-  return null;
+/** 1 dòng trả về từ api/tlld-live (= 1 chuyến, view m12.tlld_trip). */
+interface DongChuyenApi {
+  ngay: string;
+  ma_chuyen: string;
+  ma_tuyen: string | null;
+  loai_tai: string | null;
+  hub: string | null;
+  bien_so: string | null;
+  partner_type: string | null;
+  tai_trong_xe: number | null;
+  khoiluong_kg: number | null;
+  so_don_hang: number | null;
+  tlld_weight_chuyen: number | null;
+  tlld_vol_chuyen: number | null;
 }
 
-// CACHE + GỘP REQUEST: mỗi tab TLLD ~3MB (4 tab ≈ 13MB) -> tránh tải lại khi nhiều nơi
-// cùng cần (Overview + TLLD Tuyến…) hoặc quay lại trang trong TTL. force=true để làm mới tay.
+async function fetchTlldLive(signal?: AbortSignal): Promise<DongChuyenApi[]> {
+  // Cùng gốc (/api/...), không cần danh sách nguồn dự phòng như CSV Sheet trước đây.
+  // Timeout rộng tay (30s) — dữ liệu sẽ lớn dần khi nạp thêm lịch sử các tháng trước.
+  const res = await fetchWithTimeout("/api/tlld-live?_=" + Date.now(), { cache: "no-store", signal }, 30000);
+  if (!res.ok) throw new Error("tlld_live_" + res.status);
+  const d = await res.json();
+  if (!d?.ok) throw new Error(d?.detail || d?.error || "tlld_live_loi");
+  return (d.rows || []) as DongChuyenApi[];
+}
+
+// CACHE: tránh gọi lại khi nhiều nơi cùng cần (Overview + TLLD Tuyến…) hoặc quay lại
+// trang trong TTL. force=true để làm mới tay.
 const TLLD_TTL = 45000; // 45s: dưới nhịp poll 60s -> vẫn realtime, nhưng chuyển/về trang dùng lại ngay.
 let tlldCache: { at: number; data: TlldIndex } | null = null;
 let tlldInflight: Promise<TlldIndex> | null = null;
@@ -187,116 +182,79 @@ async function loadTlldUncached(signal?: AbortSignal): Promise<TlldIndex> {
   // code -> hub -> số dòng — để suy ra hub NGUỒN chính của mỗi mã tuyến (cho báo cáo Tổng cụm theo hub).
   const hubAcc = new Map<string, Map<string, number>>();
 
-  // Xử lý (parse + gộp) TỪNG hub NGAY khi tab đó tải xong, không đợi đủ cả 4 tab mới bắt đầu
-  // parse (trước đây `Promise.all` rồi mới for-loop parse tuần tự -> hub nhỏ tải xong trước
-  // vẫn phải đợi hub HCM01 ~11MB tải xong mới được xử lý). HCM01/HCM20 ~17MB dữ liệu thật
-  // (đã kiểm tra: không phải cột thừa) nên vẫn mất vài giây tải mạng — đây là cách giảm phần
-  // xử lý CHỜ THÊM sau khi tải xong, không giảm được thời gian tải mạng của bản thân nó.
-  function processHub(hub: string, text: string): void {
-    const rows = parseCSV(text);
-    if (rows.length < 2) return;
-    const H = rows[0];
-    let dCol = findCol(H, ["ngay_xuat", "date", "ngay"]);
-    if (dCol < 0) dCol = 0;
-    let cCol = findCol(H, ["ma_tuyen", "scheduler_name", "schedule_name"]);
-    if (cCol < 0) cCol = 3;
-    let wCol = findCol(H, ["tlld_weight"]);
-    if (wCol < 0) wCol = 10;
-    let mcCol = findCol(H, ["ma_chuyen"]);
-    if (mcCol < 0) mcCol = 1;
-    let rtCol = findCol(H, ["route"]);
-    if (rtCol < 0) rtCol = 2;
-    let tcCol = findCol(H, ["truck_cap"]);
-    if (tcCol < 0) tcCol = 5;
-    let bsCol = findCol(H, ["bien_so_xe", "bien_so"]);
-    if (bsCol < 0) bsCol = 6;
-    let ptCol = findCol(H, ["partner_type", "partner"]);
-    if (ptCol < 0) ptCol = 7;
-    let ltCol = findCol(H, ["loai_tai"]);
-    if (ltCol < 0) ltCol = 8;
-    let vCol = findCol(H, ["tlld_vol"]);
-    if (vCol < 0) vCol = 9;
-    let odCol = findCol(H, ["so_don_hang", "so_don"]);
-    if (odCol < 0) odCol = 11;
-    let kgCol = findCol(H, ["khoiluong_kg", "khoi_luong"]);
-    if (kgCol < 0) kgCol = 12;
-    const g = (r: string[], i: number) => (i >= 0 && i < r.length ? (r[i] || "").trim() : "");
+  // 1 dòng JSON = 1 chuyến (view đã khử trùng lặp điểm-dừng, xem 0005) -> không còn
+  // phải đoán cột/tách nhiều tab hub như CSV cũ, chỉ việc gộp thẳng vào các map trên.
+  function processDong(r: DongChuyenApi): void {
+    const code = normCode(r.ma_tuyen || "");
+    const date = r.ngay;
+    const w = r.tlld_weight_chuyen;
+    const mc = r.ma_chuyen || "";
+    const hub = r.hub || "—";
 
-    for (const r of rows.slice(1)) {
-      const code = normCode(r[cCol]);
-      const date = parseDate(r[dCol]);
-      const w = parseFill(r[wCol]);
-      const mc = g(r, mcCol);
-
-      if (code) {
-        let hm = hubAcc.get(code);
-        if (!hm) { hm = new Map(); hubAcc.set(code, hm); }
-        hm.set(hub, (hm.get(hub) || 0) + 1);
-      }
-
-      // Lập chỉ mục theo MÃ CHUYẾN (kể cả khi thiếu tlld_weight) để luôn tra được.
-      if (mc) {
-        const key = mc.toUpperCase();
-        const existing = byChuyen.get(key);
-        if (!existing || (existing.tlldWeight == null && w != null)) {
-          byChuyen.set(key, {
-            maChuyen: mc,
-            date: date || "",
-            code,
-            routeText: g(r, rtCol),
-            truckCap: g(r, tcCol),
-            bienSo: g(r, bsCol).replace(/^_+/, ""),
-            partner: g(r, ptCol),
-            loaiTai: g(r, ltCol),
-            tlldVol: parseFill(g(r, vCol)),
-            tlldWeight: w,
-            soDon: g(r, odCol),
-            kg: g(r, kgCol),
-          });
-        }
-        if (code) {
-          let cs = chuyenAcc.get(code);
-          if (!cs) { cs = new Set(); chuyenAcc.set(code, cs); }
-          cs.add(mc);
-        }
-      }
-
-      // Lưu mô tả lộ trình tiêu biểu cho mã tuyến (chọn chuỗi dài/đầy đủ nhất).
-      if (code) {
-        const rt = g(r, rtCol);
-        if (rt && rt.length > (routeTextAcc.get(code)?.length ?? 0)) routeTextAcc.set(code, rt);
-      }
-
-      // Gom số đơn + khối lượng theo tuyến/ngày (kể cả khi thiếu tlld_weight).
-      if (code && date) {
-        const soDon = parseFloat(g(r, odCol).replace(/,/g, "")) || 0;
-        const kg = parseFloat(g(r, kgCol).replace(/,/g, "")) || 0;
-        if (soDon || kg) {
-          let vm = volAcc.get(code);
-          if (!vm) { vm = new Map(); volAcc.set(code, vm); }
-          const ve = vm.get(date) ?? { soDon: 0, kg: 0 };
-          ve.soDon += soDon; ve.kg += kg;
-          vm.set(date, ve);
-        }
-      }
-
-      if (!code || !date || w == null) continue;
-      const ds = dayStat.get(date) ?? { n: 0, nz: 0 };
-      ds.n++;
-      if (w > 0) ds.nz++;
-      dayStat.set(date, ds);
-      let m = acc.get(code);
-      if (!m) { m = new Map(); acc.set(code, m); }
-      let e = m.get(date);
-      if (!e) { e = { nhap: { s: 0, c: 0 }, xuat: { s: 0, c: 0 }, all: { s: 0, c: 0 } }; m.set(date, e); }
-      e.all.s += w; e.all.c++;
-      const dir = dirOf(g(r, ltCol));
-      if (dir === "xuat") { e.xuat.s += w; e.xuat.c++; }
-      else if (dir === "nhap") { e.nhap.s += w; e.nhap.c++; }
+    if (code) {
+      let hm = hubAcc.get(code);
+      if (!hm) { hm = new Map(); hubAcc.set(code, hm); }
+      hm.set(hub, (hm.get(hub) || 0) + 1);
     }
+
+    // Lập chỉ mục theo MÃ CHUYẾN (kể cả khi thiếu tlld_weight) để luôn tra được.
+    if (mc) {
+      const key = mc.toUpperCase();
+      const existing = byChuyen.get(key);
+      if (!existing || (existing.tlldWeight == null && w != null)) {
+        byChuyen.set(key, {
+          maChuyen: mc,
+          date: date || "",
+          code,
+          // ⚠ Chưa có mô tả lộ trình từ nguồn Data API (khác CSV cũ có sẵn cột "route").
+          // Nơi hiển thị (SapLichTai.tsx) đã có fallback dựng từ lịch tải khi rỗng.
+          routeText: "",
+          truckCap: r.tai_trong_xe != null ? String(r.tai_trong_xe) : "",
+          bienSo: (r.bien_so || "").replace(/^_+/, ""),
+          partner: r.partner_type || "",
+          loaiTai: r.loai_tai || "",
+          tlldVol: r.tlld_vol_chuyen,
+          tlldWeight: w,
+          soDon: r.so_don_hang != null ? String(r.so_don_hang) : "",
+          kg: r.khoiluong_kg != null ? String(r.khoiluong_kg) : "",
+        });
+      }
+      if (code) {
+        let cs = chuyenAcc.get(code);
+        if (!cs) { cs = new Set(); chuyenAcc.set(code, cs); }
+        cs.add(mc);
+      }
+    }
+
+    // Gom số đơn + khối lượng theo tuyến/ngày (kể cả khi thiếu tlld_weight).
+    if (code && date) {
+      const soDon = r.so_don_hang || 0;
+      const kg = r.khoiluong_kg || 0;
+      if (soDon || kg) {
+        let vm = volAcc.get(code);
+        if (!vm) { vm = new Map(); volAcc.set(code, vm); }
+        const ve = vm.get(date) ?? { soDon: 0, kg: 0 };
+        ve.soDon += soDon; ve.kg += kg;
+        vm.set(date, ve);
+      }
+    }
+
+    if (!code || !date || w == null) return;
+    const ds = dayStat.get(date) ?? { n: 0, nz: 0 };
+    ds.n++;
+    if (w > 0) ds.nz++;
+    dayStat.set(date, ds);
+    let m = acc.get(code);
+    if (!m) { m = new Map(); acc.set(code, m); }
+    let e = m.get(date);
+    if (!e) { e = { nhap: { s: 0, c: 0 }, xuat: { s: 0, c: 0 }, all: { s: 0, c: 0 } }; m.set(date, e); }
+    e.all.s += w; e.all.c++;
+    const dir = dirOf(r.loai_tai || "");
+    if (dir === "xuat") { e.xuat.s += w; e.xuat.c++; }
+    else if (dir === "nhap") { e.nhap.s += w; e.nhap.c++; }
   }
 
-  await Promise.all(TLLD_TABS.map((t) => fetchTab(t.gid, signal).then((text) => { if (text) processHub(t.hub, text); })));
+  for (const r of await fetchTlldLive(signal)) processDong(r);
 
   // Ngày "đã chốt" = ≥70% dòng có giá trị > 0 (loại ngày đang nhập dở -> toàn 0).
   const complete = [...dayStat.entries()]

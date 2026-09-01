@@ -88,6 +88,41 @@ export function select<T = any>(table: string, o: QueryOpts = {}): Promise<T[]> 
   return call(table + qs(o), { method: "GET" }, o.actor);
 }
 
+/** Trang mỗi lượt phân trang của selectAll(). PostgREST/Supabase mặc định cắt ở
+ *  1000 dòng/lời gọi dù không xin limit — selectAll() phải tự phân trang qua
+ *  header Range, không thì bảng/view nhiều hơn 1000 dòng sẽ mất dữ liệu âm thầm
+ *  (không báo lỗi, chỉ trả về đúng 1000 dòng đầu). */
+const TRANG_SELECT_ALL = 1000;
+
+/** Như select(), nhưng tự phân trang cho tới hết — dùng khi số dòng có thể vượt
+ *  ngưỡng mặc định của PostgREST (bảng/view lớn, đọc theo khoảng ngày dài).
+ *  o.limit bị bỏ qua nếu có (phân trang tự lo hết, không giới hạn tổng). */
+export async function selectAll<T = any>(table: string, o: QueryOpts = {}): Promise<T[]> {
+  const out: T[] = [];
+  const base = table + qs({ ...o, limit: undefined });
+  for (let from = 0; ; from += TRANG_SELECT_ALL) {
+    const to = from + TRANG_SELECT_ALL - 1;
+    const r = await fetch(URL_() + "/rest/v1/" + base, {
+      headers: {
+        ...headers("GET", o.actor),
+        Range: `${from}-${to}`,
+        "Range-Unit": "items",
+      },
+    });
+    const txt = await r.text();
+    // 200 = trọn trang cuối cùng vừa đủ hết dữ liệu; 206 = còn trang sau. Dùng
+    // content-range để biết CHẮC đã hết hay chưa, không đoán qua độ dài trang.
+    if (!r.ok && r.status !== 206) throw new SupabaseError(r.status, txt);
+    const trang: T[] = txt ? JSON.parse(txt) : [];
+    out.push(...trang);
+    const cr = r.headers.get("content-range"); // dạng "0-999/2647" hoặc "0-999/*"
+    const tong = cr?.split("/")[1];
+    const daDuTong = tong && tong !== "*" ? out.length >= Number(tong) : trang.length < TRANG_SELECT_ALL;
+    if (daDuTong || trang.length === 0) break;
+  }
+  return out;
+}
+
 export async function one<T = any>(table: string, o: QueryOpts = {}): Promise<T | null> {
   const rows = await select<T>(table, { ...o, limit: 1 });
   return rows[0] ?? null;
