@@ -9,13 +9,16 @@
      • Token Data API và khoá Supabase nằm nguyên trên Vercel, không bê ra máy cá nhân.
      • Lỗi khoảng nào thì chạy lại đúng khoảng đó.
 
-   ⚠ VÌ SAO CHIA THEO TUẦN CHỨ KHÔNG THEO NGÀY:
-   Data API tính quota theo số lần POST /queries mỗi ngày — mặc định 200, có token
-   bị đặt xuống 50. Còn việc kéo dữ liệu về (GET /next) thì KHÔNG tốn quota.
-   Nạp 3 tháng mà chia theo ngày là ~90 lượt POST, ăn nửa quota hoặc vượt hẳn;
-   chia theo tuần chỉ còn ~13 lượt. Gom càng lớn càng rẻ quota, nhưng đổi lại mỗi
-   lượt chạy lâu hơn và endpoint có trần 300 giây — tuần là mức cân bằng.
-   Khoảng nào bị quá giờ thì chạy lại riêng khoảng đó với --ngay=3 cho nhỏ lại.
+   ⚠ VÌ SAO MẶC ĐỊNH 3 NGÀY MỘT LƯỢT:
+   Có hai ràng buộc kéo ngược chiều nhau.
+     • Quota: Data API đếm theo số lần POST /queries mỗi ngày -> gom càng nhiều
+       ngày vào một lượt càng rẻ. GET /next thì KHÔNG tốn quota.
+     • Thời gian: endpoint có trần 300 giây -> gom nhiều quá là quá giờ.
+   Đo thật ngày 30/08: 2.647 điểm dừng, 809 chuyến, hết 51 GIÂY cho MỘT ngày.
+   Vậy 7 ngày ~350 giây, vượt trần. 3 ngày ~150 giây, còn dư gấp đôi.
+   Và quota đo được còn 425 lượt, thừa sức cho ~30 lượt nạp 3 tháng — nên chia
+   nhỏ gần như không tốn gì, mà an toàn hơn hẳn.
+   Ngày cao điểm nhiều chuyến hơn thì hạ tiếp: --ngay=2 hoặc --ngay=1.
 
    Cách chạy:
      node scripts/tlld-backfill.mjs "<CRON_SECRET>" 2026-06-01 2026-09-01
@@ -35,10 +38,10 @@ const co = (ten, mac) => {
 const viTri = args.filter((a) => !a.startsWith("--"));
 const [SECRET, TU, DEN] = viTri;
 const BASE = co("base", "https://m12-linehaul.vercel.app");
-const BUOC = Math.max(1, Number(co("ngay", "7")) || 7);
+const BUOC = Math.max(1, Number(co("ngay", "3")) || 3);
 
 if (!SECRET || !TU || !DEN) {
-  console.error('Dùng: node scripts/tlld-backfill.mjs "<CRON_SECRET>" <tu-ngay> <den-ngay> [--ngay=7] [--base=...]');
+  console.error('Dùng: node scripts/tlld-backfill.mjs "<CRON_SECRET>" <tu-ngay> <den-ngay> [--ngay=3] [--base=...]');
   console.error('Ví dụ: node scripts/tlld-backfill.mjs "$CRON_SECRET" 2026-06-01 2026-09-01');
   process.exit(1);
 }
@@ -58,7 +61,7 @@ for (let t = Date.parse(TU); t < Date.parse(DEN); t += BUOC * NGAY) {
 }
 
 console.log(`▸ ${TU} .. ${DEN} (không gồm ngày cuối), chia ${BUOC} ngày/lượt`);
-console.log(`▸ ${khoang.length} lượt POST — Data API mặc định cho 200 lượt/ngày, có token chỉ 50`);
+console.log(`▸ ${khoang.length} lượt POST (GET /next không tính quota)`);
 console.log(`▸ Đích: ${BASE}/api/cron/tlld\n`);
 
 let tongDoc = 0, tongGhi = 0, tongChuyen = 0, tongThieuTuyen = 0, quotaCuoi = null, boQua = 0;

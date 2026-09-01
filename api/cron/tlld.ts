@@ -209,6 +209,17 @@ export default async function handler(req: NodeReq, res: NodeRes): Promise<void>
 
     const chuyen = new Set(rows.map((r) => r.ma_chuyen)).size;
     const thieuMaTuyen = rows.filter((r) => !r.ma_tuyen).length;
+
+    // Phân tách theo hub — để đối chiếu thẳng với từng tab TLLD trong workbook cũ.
+    // Không có cái này thì chỉ so được con số tổng, mà tổng khớp chưa chắc từng hub khớp.
+    const theoHub: Record<string, { diem: number; chuyen: number }> = {};
+    const chuyenTheoHub: Record<string, Set<string>> = {};
+    for (const r of rows) {
+      const k = r.hub || "(trống)";
+      (theoHub[k] ||= { diem: 0, chuyen: 0 }).diem++;
+      (chuyenTheoHub[k] ||= new Set()).add(r.ma_chuyen);
+    }
+    for (const k of Object.keys(theoHub)) theoHub[k].chuyen = chuyenTheoHub[k].size;
     return tra(res, {
       ok: true, tu, den,
       doc: rows.length, ghi: soGhi, so_chuyen: chuyen,
@@ -216,6 +227,7 @@ export default async function handler(req: NodeReq, res: NodeRes): Promise<void>
       // Khác 0 nghĩa là khoá của bảng chưa mô tả đúng dữ liệu -> cần xem lại,
       // đừng coi là chuyện bình thường.
       gop_trung: trung,
+      theo_hub: theoHub,
       thieu_ma_tuyen: thieuMaTuyen,
       // Quota Data API tính theo số lần POST /queries mỗi ngày (mặc định 200,
       // có token bị đặt xuống 50). Nạp lịch sử mà không nhìn số này là dễ cụt giữa chừng.
