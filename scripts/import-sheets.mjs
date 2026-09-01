@@ -371,7 +371,21 @@ async function importRoutes() {
       console.log(`   ${reg.key}: bỏ qua (không còn là dữ liệu tuyến — xem EXCLUDED_REGION_KEYS)`);
       continue;
     }
-    const grid = CSV_DIR ? readGridTuFile(reg.key) : await readGrid(SHEET_ID, reg.gid);
+    let grid;
+    if (CSV_DIR) {
+      // --csv-dir: thiếu file KHÔNG chặn cả lượt nạp — user có thể cố ý chưa
+      // có file cho vùng đó tối nay (vd đang gộp/không rõ tab), bổ sung sau
+      // bằng cách chạy lại đúng --only=routes khi có file, không ảnh hưởng
+      // các vùng đã nạp (upsert theo region_key,code nên chạy lại vẫn an toàn).
+      try {
+        grid = readGridTuFile(reg.key);
+      } catch (e) {
+        console.log(`   ${reg.key}: bỏ qua (chưa có file CSV — ${e.message}, bổ sung sau khi có)`);
+        continue;
+      }
+    } else {
+      grid = await readGrid(SHEET_ID, reg.gid);
+    }
     const h = findHeaderRow(grid);
     const H = grid[h] || [];
     const c = {
