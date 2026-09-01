@@ -54,7 +54,10 @@ function sangDongDb(r: TlldRow): Record<string, unknown> {
   return {
     ngay: r.ngay,
     ma_chuyen: r.ma_chuyen,
-    thu_tu: soHoacNull(r.thu_tu) ?? 0,
+    // SQL đã COALESCE(actual_sort_number, sort_number). Tới đây mà vẫn null thì
+    // là nguồn thiếu thật — vẫn phải có giá trị vì đây là khoá, nhưng dùng -1 để
+    // phân biệt với điểm số 0 hợp lệ, nhìn vào bảng là biết ngay chỗ cần soi.
+    thu_tu: soHoacNull(r.thu_tu) ?? -1,
     ma_tuyen: r.ma_tuyen || null,
     loai_lich: r.loai_lich || null,
     loai_tai: r.loai_tai || null,
@@ -86,6 +89,19 @@ function sangDongDb(r: TlldRow): Record<string, unknown> {
     raw: r,
     source: "data-api",
   };
+}
+
+/* Gộp các dòng TRÙNG KHOÁ trước khi ghi.
+   Postgres không cho một lệnh INSERT ... ON CONFLICT chạm cùng một dòng hai lần:
+     21000 ON CONFLICT DO UPDATE command cannot affect row a second time
+   Nghĩa là nguồn có thể trả về hai dòng cùng (ngày, mã chuyến, thứ tự điểm).
+   Giữ dòng SAU CÙNG và ĐẾM số bị gộp — con số đó trả về trong phản hồi, vì nó
+   nói lên giả định "bộ ba này là duy nhất" có đúng hay không. Gộp nhiều là phải
+   xem lại khoá của bảng, chứ không phải cứ lặng lẽ bỏ bớt dòng. */
+function gopTrung(rows: Record<string, unknown>[]): { rows: Record<string, unknown>[]; trung: number } {
+  const m = new Map<string, Record<string, unknown>>();
+  for (const r of rows) m.set(`${r.ngay}|${r.ma_chuyen}|${r.thu_tu}`, r);
+  return { rows: [...m.values()], trung: rows.length - m.size };
 }
 
 /** Ghi đè theo khoá (ngay, ma_chuyen, thu_tu) -> chạy lại bao nhiêu lần cũng được. */
@@ -188,13 +204,18 @@ export default async function handler(req: NodeReq, res: NodeRes): Promise<void>
     if (!rows.length) {
       return tra(res, { ok: true, tu, den, doc: 0, ghi: 0, quota_con_lai: quotaConLai, note: "khong_co_du_lieu" });
     }
-    const soGhi = await ghi(rows.map(sangDongDb), env);
+    const { rows: sach, trung } = gopTrung(rows.map(sangDongDb));
+    const soGhi = await ghi(sach, env);
 
     const chuyen = new Set(rows.map((r) => r.ma_chuyen)).size;
     const thieuMaTuyen = rows.filter((r) => !r.ma_tuyen).length;
     return tra(res, {
       ok: true, tu, den,
       doc: rows.length, ghi: soGhi, so_chuyen: chuyen,
+      // Số dòng trùng khoá (ngày, mã chuyến, thứ tự điểm) đã bị gộp.
+      // Khác 0 nghĩa là khoá của bảng chưa mô tả đúng dữ liệu -> cần xem lại,
+      // đừng coi là chuyện bình thường.
+      gop_trung: trung,
       thieu_ma_tuyen: thieuMaTuyen,
       // Quota Data API tính theo số lần POST /queries mỗi ngày (mặc định 200,
       // có token bị đặt xuống 50). Nạp lịch sử mà không nhìn số này là dễ cụt giữa chừng.

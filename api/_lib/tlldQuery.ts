@@ -80,6 +80,7 @@ stops AS (
     t.partner_code, t.partner_type,
     CAST(t.truck_capacity_weight AS DOUBLE) AS truck_capacity_weight,
     t.actual_sort_number,
+    t.sort_number,          -- dự phòng: actual_sort_number có dòng bị null
     t.stoppoint_name, t.warehouse_id, t.warehouse_type, t.est_distance,
     t.total_weight_converted_new AS w_on_truck,
     t.volume_ordercode           AS q_on_truck,
@@ -186,7 +187,11 @@ SELECT
   l.is_special,
   l.std_weight                    AS ky_tieu_chuan,
   l.std_orders                    AS don_tieu_chuan,
-  l.actual_sort_number            AS thu_tu,
+  -- Thứ tự CHẠY THẬT, lùi về thứ tự KẾ HOẠCH khi nguồn bỏ trống.
+  -- Trước đây quy null về 0 ở tầng ứng dụng -> mọi điểm thiếu thứ tự của cùng
+  -- một chuyến đều thành 0, đụng nhau ở khoá duy nhất:
+  --   21000 ON CONFLICT DO UPDATE command cannot affect row a second time
+  COALESCE(l.actual_sort_number, l.sort_number) AS thu_tu,
   l.so_diem_dung,
   l.stoppoint_name                AS kho,
   CAST(l.warehouse_id AS VARCHAR) AS warehouse_ext_id,
@@ -208,7 +213,7 @@ FROM legs l
 JOIN trip_agg ta      ON ta.code = l.code
 LEFT JOIN route_of_trip r ON r.code = l.code
 -- Thứ tự ổn định: phân trang qua /next mà thứ tự nhảy là lấy trùng hoặc sót dòng.
-ORDER BY l.code, l.actual_sort_number
+ORDER BY l.code, COALESCE(l.actual_sort_number, l.sort_number)
 `.trim();
 }
 
