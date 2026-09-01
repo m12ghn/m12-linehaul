@@ -67,6 +67,12 @@ const REGIONS = [
   { key: "mbh-tan-tao",      gid: "1937583700" },
   { key: "mbh-tan-thuan-q7", gid: "722712650" },
 ];
+// BẢN SAO của EXCLUDED_REGION_KEYS trong src/config.ts — Sếp chốt 24/07/2026:
+// M12 không còn quản Nội Vùng HCM nữa, và nội dung tab (gid 961518640) đã đổi
+// hẳn cấu trúc (bảng BC↔NCC↔chat_id, không còn cột tuyến/tải trọng/kho) — cho
+// qua bộ đọc "tuyến + điểm dừng" chỉ ra rác, không phải lỗi đọc CSV. Bỏ khỏi
+// bước nạp routes (network lẫn --csv-dir), giữ nguyên comment gốc bên config.ts.
+const EXCLUDED_REGION_KEYS = ["noi-vung-hcm"];
 const TLLD_SHEET_ID = "1VfkJ6HOzCbidoCGqNTnU2Qs2nNMxwkKJw2_gKTSSchM";
 const TLLD_TABS = [
   { gid: "1276580053", hub: "HCM01" },
@@ -361,6 +367,10 @@ async function importRoutes() {
   let totalRoutes = 0, totalStops = 0, unmatched = new Set();
 
   for (const reg of REGIONS) {
+    if (EXCLUDED_REGION_KEYS.includes(reg.key)) {
+      console.log(`   ${reg.key}: bỏ qua (không còn là dữ liệu tuyến — xem EXCLUDED_REGION_KEYS)`);
+      continue;
+    }
     const grid = CSV_DIR ? readGridTuFile(reg.key) : await readGrid(SHEET_ID, reg.gid);
     const h = findHeaderRow(grid);
     const H = grid[h] || [];
