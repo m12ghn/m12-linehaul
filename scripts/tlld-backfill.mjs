@@ -61,7 +61,7 @@ console.log(`▸ ${TU} .. ${DEN} (không gồm ngày cuối), chia ${BUOC} ngày
 console.log(`▸ ${khoang.length} lượt POST — Data API mặc định cho 200 lượt/ngày, có token chỉ 50`);
 console.log(`▸ Đích: ${BASE}/api/cron/tlld\n`);
 
-let tongDoc = 0, tongGhi = 0, tongChuyen = 0, tongThieuTuyen = 0, quotaCuoi = null;
+let tongDoc = 0, tongGhi = 0, tongChuyen = 0, tongThieuTuyen = 0, quotaCuoi = null, boQua = 0;
 const loi = [];
 
 for (const [i, [tu, den]] of khoang.entries()) {
@@ -80,6 +80,13 @@ for (const [i, [tu, den]] of khoang.entries()) {
         console.log("\n✖ Hết quota Data API trong ngày. Quota reset 07:00 giờ VN — mai chạy tiếp.");
         break;
       }
+      continue;
+    }
+    // Endpoint tự bỏ qua khoảng đã nạp trong 12 tiếng để khỏi tốn quota.
+    // Đây KHÔNG phải lỗi — chạy lại script sau khi đứt giữa chừng là gặp nhiều.
+    if (d.bo_qua) {
+      boQua++;
+      console.log(`${nhan}  ⤳ bỏ qua, đã nạp lúc ${d.nap_luc}`);
       continue;
     }
     tongDoc += d.doc || 0;
@@ -103,6 +110,7 @@ console.log(`\n── TỔNG ─────────────────
 console.log(`Điểm dừng đọc được : ${tongDoc.toLocaleString("vi-VN")}`);
 console.log(`Ghi vào Supabase   : ${tongGhi.toLocaleString("vi-VN")}`);
 console.log(`Chuyến             : ${tongChuyen.toLocaleString("vi-VN")}`);
+if (boQua) console.log(`Bỏ qua (đã nạp rồi): ${boQua} khoảng`);
 if (quotaCuoi != null) console.log(`Quota còn lại      : ${quotaCuoi}`);
 if (tongThieuTuyen) {
   console.log(`\n⚠ ${tongThieuTuyen.toLocaleString("vi-VN")} dòng KHÔNG có mã tuyến.`);

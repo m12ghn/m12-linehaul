@@ -3,7 +3,13 @@
 
    GET /api/cron/tlld                      -> nạp NGÀY HÔM QUA
    GET /api/cron/tlld?tu=...&den=...       -> nạp một khoảng (dùng để nạp lịch sử)
+   GET /api/cron/tlld?...&force=1          -> nạp lại kể cả khi đã có dữ liệu
    Bắt buộc: Authorization: Bearer CRON_SECRET
+
+   LỊCH: 01:00 UTC = 08:00 giờ VN. Chọn 8 giờ chứ không phải 7 vì quota Data API
+   reset đúng 07:00 giờ VN — chạy lúc 8 giờ là quota vừa đầy lại được một tiếng,
+   còn đệm nếu lần đầu lỗi phải chạy lại. TLLD vốn là số của ngày N-1, chốt quanh
+   nửa đêm, nên 8 giờ sáng là dư sớm.
 
    VÌ SAO KÉO VỀ CHỨ KHÔNG ĐỂ BÊN KIA ĐẨY SANG: ghi vào Supabase cần khoá
    service_role, mà khoá đó đi xuyên toàn bộ phân quyền — đọc ghi được mọi bảng
@@ -15,7 +21,7 @@
      CRON_SECRET      Vercel tự sinh khi khai báo crons
      DATA_API_TOKEN   token Bearer của Data API — NHẬP TAY trên Vercel
    ============================================================ */
-import { json } from "./../_lib/supabase";
+import { json, select } from "./../_lib/supabase";
 import { layTlld, type TlldRow } from "./../_lib/tlldQuery";
 
 // CHẠY TRÊN NODE, KHÔNG PHẢI EDGE — và đây là chỗ dễ vấp:
@@ -116,6 +122,39 @@ export default async function handler(req: Request): Promise<Response> {
   const homQua = new Date(Date.now() - 86_400_000);
   const tu = u.searchParams.get("tu") || ngayISO(homQua);
   const den = u.searchParams.get("den") || ngayISO(new Date(Date.parse(tu) + 86_400_000));
+
+  const force = u.searchParams.get("force") === "1";
+
+  // ── RÀO TIẾT KIỆM QUOTA ─────────────────────────────────────
+  // Đếm trước trong Supabase xem khoảng ngày này đã có dữ liệu chưa. Phép đếm
+  // này KHÔNG tốn quota Data API, còn mỗi lần POST /queries thì tốn 1 lượt trên
+  // tổng 200/ngày (có token chỉ 50).
+  // Gặp dữ liệu đã nạp trong vòng 12 tiếng thì bỏ qua — chặn mấy lần bấm lại,
+  // cron chạy trùng, hay chạy nạp lịch sử đè lên khoảng đã xong.
+  // Muốn nạp lại thật thì thêm &force=1.
+  if (!force) {
+    try {
+      const daCo = await select<{ ngay: string; updated_at: string }>("tlld_daily", {
+        select: "ngay,updated_at",
+        // Gói cả 2 vế vào một `and=(...)` cho rõ ràng — trộn điều kiện thường
+        // với and=() dễ ra kết quả không như mình nghĩ.
+        filter: { and: `(ngay.gte.${tu},ngay.lt.${den})` },
+        order: "updated_at.desc",
+        limit: 1,
+      });
+      const moiNhat = daCo[0]?.updated_at ? Date.parse(daCo[0].updated_at) : 0;
+      if (moiNhat && Date.now() - moiNhat < 12 * 3_600_000) {
+        return json({
+          ok: true, tu, den, bo_qua: true,
+          ly_do: "da_nap_trong_12_gio",
+          nap_luc: daCo[0].updated_at,
+          goi_y: "thêm &force=1 nếu thật sự muốn nạp lại (tốn 1 lượt quota)",
+        });
+      }
+    } catch {
+      // Đếm hỏng thì cứ nạp — thà tốn 1 lượt quota còn hơn bỏ mất một ngày dữ liệu.
+    }
+  }
 
   const batDau = Date.now();
   try {
