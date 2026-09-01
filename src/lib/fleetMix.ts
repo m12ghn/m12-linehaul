@@ -4,7 +4,7 @@
    - Xe book NCC                  -> đếm tuyến theo NCC từ Tăng Cường Lấy.
    - Đội xe nền "đang có"          -> tham chiếu kỳ event gần đây (10/10, 11/11).
    ============================================================ */
-import { loadSheet } from "./sheet";
+import { loadRegion } from "./db/lichTaiApi"; // 01/09/2026: Lịch Tải đã chuyển sang Supabase
 import { loadTangCuong } from "./tangcuong";
 import { SHEETS, SHEET_ID, TANG_CUONG_LAY_GID, EVENT_T6_GID, EXCLUDED_REGION_KEYS } from "../config";
 
@@ -200,7 +200,7 @@ export async function loadFleetMix(signal?: AbortSignal): Promise<FleetMix> {
   // khỏi TỔNG HỢP cụm — cùng chính sách đã áp cho nccFixedCapacity.ts, tránh đếm nhầm tuyến
   // ngoài phạm vi (hoặc dữ liệu tab đã đổi cấu trúc) thành "chưa ghi tải trọng".
   const regionData = await Promise.all(
-    SHEETS.filter((s) => !EXCLUDED_REGION_KEYS.includes(s.key)).map((s) => loadSheet(s.gid, signal).catch(() => null))
+    SHEETS.filter((s) => !EXCLUDED_REGION_KEYS.includes(s.key)).map((s) => loadRegion(s.key, signal).catch(() => null))
   );
   for (const rd of regionData) {
     if (!rd) continue;

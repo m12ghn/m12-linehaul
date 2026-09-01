@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MapPanel } from "../components/MapPanel";
 import { AssistantChat } from "../components/AssistantChat";
-import { useSchedule } from "../lib/useSchedule";
+import { useLichTai as useSchedule } from "../lib/db/useLichTai"; // 01/09/2026: Lịch Tải đã chuyển sang Supabase
 import { useAllRoutes, usePlaceIds } from "../lib/allRoutes";
 import { PlaceInput } from "../components/PlaceInput";
 import { useTlld } from "../lib/useTlld";
@@ -130,7 +130,7 @@ export function GhepTai({
 }) {
   const [region, setRegion] = usePersistentState("ghep.region", VISIBLE_SHEETS[0].key);
   const sheet = VISIBLE_SHEETS.find((s) => s.key === region) ?? VISIBLE_SHEETS[0];
-  const { data } = useSchedule(sheet.gid);
+  const { data } = useSchedule(sheet.key);
   const tlld = useTlld().index;
 
   const [mode, setMode] = usePersistentState<"Giao" | "Lấy" | "Cả 2">("ghep.mode", "Lấy");

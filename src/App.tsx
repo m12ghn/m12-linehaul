@@ -20,7 +20,7 @@ const LichTaiNhap = lazy(() => import("./views/LichTaiNhap").then((m) => ({ defa
 import { QABoard } from "./components/QABoard";
 import { EmailGate } from "./components/EmailGate";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { useSchedule } from "./lib/useSchedule";
+import { useLichTai } from "./lib/db/useLichTai";
 import { initAutoReload } from "./lib/autoReload";
 import { initLiveGeo } from "./lib/geo";
 import { useUser, addressOf } from "./lib/useUser";
@@ -48,13 +48,16 @@ export default function App() {
   const [peSub, setPeSub] = useState<"ke-hoach" | "chi-tiet">("ke-hoach");
 
   const sheet = VISIBLE_SHEETS.find((s) => s.key === sheetKey) ?? VISIBLE_SHEETS[0];
-  const { data, refreshing, refresh } = useSchedule(sheet.gid);
+  // 01/09/2026: ĐÃ ĐẢO CHIỀU — nguồn Lịch Tải giờ là Supabase (useLichTai), không còn đọc Google
+  // Sheet nữa (trước đó useSchedule(sheet.gid) đọc CSV). Xem lib/db/useLichTai.ts — cùng hình dạng
+  // trả về nên chỉ đổi đúng dòng này + tham số (gid -> key, region_key trên Supabase).
+  const { data, refreshing, refresh } = useLichTai(sheet.key);
   const { canOpen, canDo } = useMyRole(); // kiểm tra quyền theo vai trò -> chặn cả tầng render, không chỉ khoá tab
-  // Sau khi sửa Lịch Tải trên dash (ghi ngược vào Sheet): làm mới ngay + làm mới lại lần nữa sau ~2.5s
-  // (gviz có độ trễ lan truyền ngắn sau khi ghi, gọi lại 1 lần cho chắc ăn thấy đúng giá trị mới).
+  // Trước đây phải làm mới 2 lần cách nhau 2.5s vì ghi vào Sheet có độ trễ lan truyền (gviz).
+  // Ghi vào Supabase đọc lại được đúng ngay -> không cần trò làm mới kép nữa, nhưng vẫn giữ tên
+  // refreshSoon (nhiều nơi đang gọi) để không phải sửa thêm chỗ khác trong lần đổi này.
   function refreshSoon() {
     refresh();
-    setTimeout(refresh, 2500);
   }
 
   // Đổi vùng -> reset loại tuyến/chọn (GIỮ từ khoá tìm kiếm cho tới khi load lại web).

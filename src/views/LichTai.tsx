@@ -10,7 +10,7 @@ import { useFleet } from "../lib/useFleet";
 import { usePlaceIds } from "../lib/allRoutes";
 import { useTlld } from "../lib/useTlld";
 import { normCode } from "../lib/tlld";
-import { loadSheet } from "../lib/sheet";
+import { loadRegion } from "../lib/db/lichTaiApi"; // 01/09/2026: Lịch Tải đã chuyển sang Supabase
 import { VISIBLE_SHEETS } from "../config";
 import type { Route, SheetData } from "../types";
 
@@ -119,7 +119,7 @@ export function LichTai({
 
   // Tìm KHÔNG thấy ở vùng đang xem -> thử tra CÁC VÙNG KHÁC (Sếp báo 2026-08-24: tuyến có thật
   // trên Sheet nhưng "0 tuyến" vì đang đứng nhầm vùng — dò gõ mã tuyến không biết tuyến đó thuộc
-  // vùng nào). loadSheet() có cache TTL riêng nên không tốn thêm request nếu vùng đó đã được tải.
+  // vùng nào). loadRegion() có cache TTL riêng nên không tốn thêm request nếu vùng đó đã được tải.
   const [crossHit, setCrossHit] = useState<{ label: string; gid: string } | null>(null);
   useEffect(() => {
     if (!q || filtered.length > 0) { setCrossHit(null); return; }
@@ -128,7 +128,7 @@ export function LichTai({
       for (const s of VISIBLE_SHEETS) {
         if (s.gid === gid) continue; // vùng đang xem -> đã biết là 0 kết quả rồi
         try {
-          const res = await loadSheet(s.gid);
+          const res = await loadRegion(s.key);
           const hit = res.routes.some((r) =>
             normSearch(r.route).includes(q) ||
             r.stops.some((st) => normSearch(st.kho).includes(q)) ||

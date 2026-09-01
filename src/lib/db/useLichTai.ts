@@ -29,7 +29,7 @@ export function useLichTai(regionKey: string) {
     if (manual) setRefreshing(true);
     else setData((d) => ({ ...d, loading: d.routes.length === 0, error: null }));
     try {
-      const res = await loadRegion(mine, ctrl.signal);
+      const res = await loadRegion(mine, ctrl.signal, manual);
       if (keyRef.current !== mine) return;      // đã đổi vùng -> bỏ kết quả cũ
       setData(res);
     } catch (e: unknown) {

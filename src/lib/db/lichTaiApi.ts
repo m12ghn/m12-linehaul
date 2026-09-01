@@ -56,7 +56,30 @@ export function editErrorText(e?: string, extra?: { current?: string; field?: st
 }
 
 // ---------- ĐỌC ----------
-export async function loadRegion(regionKey: string, signal?: AbortSignal): Promise<DbSheetData> {
+// CACHE + GỘP REQUEST: cùng lý do đã có ở src/lib/sheet.ts (loadSheet) thời còn đọc CSV —
+// nhiều nơi cùng cần 1 vùng trong cùng lúc (useSchedule đang xem vùng X, allRoutes/fleetMix/gsvt
+// tải CẢ 6 vùng để gộp) -> không có cache thì bấm nhanh/đổi vùng liên tục ra nhiều request trùng.
+// TTL khớp REFRESH_MS (chưa tới nhịp tự đồng bộ thì dùng lại, không hỏi Supabase thêm).
+const REGION_TTL = 40000;
+const regionCache = new Map<string, { at: number; data: DbSheetData }>();
+const regionInflight = new Map<string, Promise<DbSheetData>>();
+
+export async function loadRegion(regionKey: string, signal?: AbortSignal, force = false): Promise<DbSheetData> {
+  if (!force) {
+    const c = regionCache.get(regionKey);
+    if (c && Date.now() - c.at < REGION_TTL) return c.data;
+    const p = regionInflight.get(regionKey);
+    if (p) return p; // đang tải vùng này -> dùng chung promise, không gọi trùng
+  }
+  const run = loadRegionUncached(regionKey, signal).then((data) => {
+    regionCache.set(regionKey, { at: Date.now(), data });
+    return data;
+  });
+  regionInflight.set(regionKey, run);
+  try { return await run; } finally { regionInflight.delete(regionKey); }
+}
+
+async function loadRegionUncached(regionKey: string, signal?: AbortSignal): Promise<DbSheetData> {
   const r = await fetch(`/api/lichtai?region=${encodeURIComponent(regionKey)}`, {
     headers: adminHeaders(), cache: "no-store", signal,
   });
