@@ -26,24 +26,41 @@ create table if not exists m12.tlld_daily (
 
   -- ---- khoá nghiệp vụ ----
   -- Ngày lấy theo lần check-in ĐẦU của chuyến (không phải load_date kế hoạch).
+  -- Ngày = date(first_check_in), CHỐT dùng thẳng, không đổi múi giờ.
+  -- KHÔNG dùng load_date: đó là ngày bản ghi được chạm lần cuối, không phải ngày
+  -- chuyến chạy (chuyến E2608231HDJ88WW chạy 23/08 nhưng load_date ghi 30/08).
   ngay          date not null,
   ma_chuyen     text not null,                  -- code, ví dụ E2608231HDJ88WW
-  thu_tu        int  not null,                  -- sort_number: thứ tự điểm dừng trong chuyến
+  thu_tu        int  not null,                  -- actual_sort_number: thứ tự CHẠY THẬT
+                                                -- (không phải sort_number kế hoạch — xe đảo điểm là hai cái lệch)
   -- Một chuyến có thể ghé cùng một kho hai lần -> khoá phải có thu_tu,
   -- lấy tên kho làm khoá là trùng dòng, chạy nạp lần hai sẽ đè mất.
   constraint tlld_daily_uidx unique (ngay, ma_chuyen, thu_tu),
 
   -- ---- thuộc tính CHUYẾN (lặp lại ở mọi điểm dừng của chuyến) ----
-  ma_tuyen      text,                           -- scheduler_name — khoá nối sang bảng routes
+  -- route_code, lấy từ bảng dtm_logistics_trip_filledrate — khoá nối sang m12.routes
+  ma_tuyen      text,
   code_norm     text generated always as (upper(regexp_replace(coalesce(ma_tuyen,''), '\s+', '', 'g'))) stored,
-  loai_lich     text,                           -- 'Cố định' | 'Tăng cường' (suy từ scheduler_name)
+
+  -- HAI CỘT KHÁC NHAU, đừng gộp. Nguồn từng đặt cả hai cùng tên `loai_tai`
+  -- nên đã gây nhầm một lần:
+  loai_lich     text,                           -- 'Cố định' | 'Tăng cường' — suy từ scheduler_name
+  loai_tai      text,                           -- 'Xuất' | 'Nhập' — suy từ volume_ordercode_picked.
+                                                -- Đây là CÔNG TẮC chọn số: Xuất thì lấy số tại điểm
+                                                -- này, Nhập thì lấy số mang tới từ điểm trước.
+
   hub           text,
   bien_so       text,
   partner_code  text,
   partner_type  text,                           -- 'GHN' | 'NCC'
   tai_trong_xe  numeric(10,2),                  -- truck_capacity_weight, tải trọng hệ thống
-  ky_tieu_chuan  numeric(10,2),                 -- mẫu số kg, tra từ bảng cấu hình xe tải
-  don_tieu_chuan numeric(10,2),                 -- mẫu số đơn
+
+  -- Bảng cấu hình xe tải có 9 bậc: 2 bậc đầu tra theo BIỂN SỐ, 7 bậc sau theo tải trọng.
+  -- Lưu lại cờ để sau này đối chiếu được vì sao một xe ra mẫu số đó.
+  is_van        boolean not null default false, -- bậc riêng 900 / 900
+  is_special    boolean not null default false, -- bậc riêng 2550 đơn / 6100 kg
+  ky_tieu_chuan  numeric(10,2),                 -- mẫu số kg đã tra xong
+  don_tieu_chuan numeric(10,2),                 -- mẫu số đơn đã tra xong
   so_diem_dung  int,
   tong_quang_duong numeric(12,2),               -- L = L1 + ... + L(n-1)
 
