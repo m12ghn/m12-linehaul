@@ -162,19 +162,19 @@ trip_agg AS (
   FROM legs GROUP BY code
 ),
 
--- Mã tuyến nằm ở bảng khác. Gom về 1 dòng/chuyến bằng arbitrary() thay vì
--- DISTINCT: nếu một chuyến lỡ có 2 route_code thì DISTINCT sẽ NHÂN ĐÔI mọi điểm
--- dừng của chuyến đó — xem báo cáo bằng mắt thì khó thấy, nạp vào database là vỡ khoá.
-route_of_trip AS (
-  SELECT code, arbitrary(route_code) AS route_code
-  FROM "ghn-reporting"."fa"."dtm_logistics_trip_filledrate"
-  GROUP BY code
-)
+-- MÃ TUYẾN = scheduler_name (đúng cột đã thăm dò ở tlld-probe.py "Câu hỏi 1").
+-- 01/09: từng đổi sang lấy route_code ở dtm_logistics_trip_filledrate (arbitrary(),
+-- LEFT JOIN) — SAI: bảng đó gán route_code CHO CẢ chuyến tăng cường/ad-hoc (vốn
+-- không thuộc tuyến cố định nào), đẩy số "tuyến" bị coi là lãng phí/vượt tải kinh
+-- niên lên bất thường cao (388/526 tuyến) và trùng lặp y hệt giữa các mốc thời
+-- gian khác nhau (mỗi route_code giả chỉ ứng với rất ít dòng dữ liệu thật).
+-- scheduler_name RỖNG đúng nghĩa "Tăng cường" (loai_lich) — NULL ra là ĐÚNG,
+-- không phải thiếu dữ liệu; NULLIF() để chuỗi rỗng cũng thành NULL thay vì "".
 
 SELECT
   CAST(date(l.first_check_in) AS VARCHAR) AS ngay,
   l.code                          AS ma_chuyen,
-  r.route_code                    AS ma_tuyen,
+  NULLIF(trim(l.scheduler_name), '') AS ma_tuyen,
   CASE WHEN l.scheduler_name IS NULL OR trim(l.scheduler_name) = ''
        THEN 'Tăng cường' ELSE 'Cố định' END AS loai_lich,
   CASE WHEN l.volume_ordercode_picked > 0 THEN 'Xuất' ELSE 'Nhập' END AS loai_tai,
@@ -211,7 +211,6 @@ SELECT
   ta.q_avg / NULLIF(ta.std_orders, 0) AS tlld_vol_chuyen
 FROM legs l
 JOIN trip_agg ta      ON ta.code = l.code
-LEFT JOIN route_of_trip r ON r.code = l.code
 -- Thứ tự ổn định: phân trang qua /next mà thứ tự nhảy là lấy trùng hoặc sót dòng.
 ORDER BY l.code, COALESCE(l.actual_sort_number, l.sort_number)
 `.trim();

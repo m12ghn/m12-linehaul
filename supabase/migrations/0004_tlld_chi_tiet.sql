@@ -38,7 +38,10 @@ create table if not exists m12.tlld_daily (
   constraint tlld_daily_uidx unique (ngay, ma_chuyen, thu_tu),
 
   -- ---- thuộc tính CHUYẾN (lặp lại ở mọi điểm dừng của chuyến) ----
-  -- route_code, lấy từ bảng dtm_logistics_trip_filledrate — khoá nối sang m12.routes
+  -- scheduler_name (dtm_logistics_trip_detail) — khoá nối sang m12.routes.
+  -- 01/09: từng lấy route_code ở dtm_logistics_trip_filledrate, SAI — xem
+  -- comment trong api/_lib/tlldQuery.ts (bảng đó gán route_code cho cả chuyến
+  -- tăng cường/ad-hoc, không phải tuyến cố định).
   ma_tuyen      text,
   code_norm     text generated always as (upper(regexp_replace(coalesce(ma_tuyen,''), '\s+', '', 'g'))) stored,
 
