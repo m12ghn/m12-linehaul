@@ -31,7 +31,7 @@ export function Header({ user, onLogout }: { user?: AppUser | null; onLogout?: (
         <div className="crumb">
           M12SC <span className="sep">-</span> <span className="lh">LINEHAUL</span>
         </div>
-        <h1>LỊCH TẢI MIỀN NAM</h1>
+        <h1>TRANG QUẢN LÝ LINEHAUL M12</h1>
         <div className="sub">
           Cập nhật: <Clock /> <span className="sep">·</span>{" "}
           <span className="live">● realtime</span>

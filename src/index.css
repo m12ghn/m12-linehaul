@@ -223,6 +223,7 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .rc-sched-tbl col.c-loai { width: 120px; }
 .rc-sched-tbl col.c-den { width: 62px; }
 .rc-sched-tbl col.c-roi { width: 62px; }
+.rc-sched-tbl col.c-act { width: 26px; }
 .rc-sched-tbl th { text-align: left; font-size: 13.5px; text-transform: uppercase; letter-spacing: .02em; color: var(--muted); font-weight: 800; padding: 6px 8px; background: var(--bg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rc-sched-tbl th.rc-th-tuyen { text-align: center; }
 /* Ô header này gộp Tên Kho + tổng điểm + thông tin xe (biển số/tài xế/SĐT). Cho XUỐNG DÒNG
@@ -251,20 +252,10 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .rc-sched-tbl tr.rc-kho .rc-diem { color: var(--orange); }
 .rc-sched-tbl .nogeo { color: var(--red); font-weight: 700; margin-left: 5px; font-size: 11.5px; }
 
-/* Sửa Lịch Tải tại chỗ (chỉ admin — xem EditableCell.tsx) */
-.rc-edit { border-bottom: 1px dotted var(--blue); cursor: pointer; }
-.rc-edit:hover { background: rgba(0,161,154,0.08); border-radius: 3px; }
-.rc-edit-in { display: inline-flex; align-items: center; gap: 4px; position: relative; }
-.rc-edit-input { font: inherit; padding: 1px 4px; border: 1px solid var(--blue); border-radius: 4px; width: 100%; min-width: 56px; box-sizing: border-box; }
-.rc-edit-busy .rc-edit-input { opacity: .6; }
-.rc-edit-err {
-  position: absolute; top: 100%; left: 0; z-index: 5; margin-top: 3px; white-space: normal;
-  background: var(--warning-soft); color: var(--ink); border: 1px solid var(--orange); border-radius: 6px;
-  padding: 6px 8px; font-size: 12px; line-height: 1.4; box-shadow: 0 2px 8px rgba(0,0,0,.12); min-width: 180px;
-}
-.rc-edit-err button { margin-left: 6px; border: none; border-radius: 4px; padding: 2px 8px; font-size: 12px; cursor: pointer; }
-.rc-edit-err button:first-of-type { background: var(--orange); color: var(--text-onaccent); }
-.rc-edit-err button:last-of-type { background: var(--line); color: var(--ink); }
+/* 03/09/2026: sửa Lịch Tải tại chỗ kiểu cũ (EditableCell, ghi thẳng /api/lichtai-edit — endpoint
+   này đã không còn tồn tại) đã bỏ hẳn. Thay bằng nút ✎ mở <RouteEditor> — CSS ở ngay trong
+   RouteCard.tsx (.rc-edit-btn/.rc-edit-close) và AuditInfo.tsx (.audit-info*), không dùng chung
+   file này nữa. */
 
 /* ===== MAP ===== */
 /* ===== ROUTE TABLE (chi tiết khi mở) ===== */
@@ -1852,7 +1843,10 @@ footer .dot-sep { margin: 0 6px; opacity: .5; }
 .menu-perm.on .mp-state{color:var(--accent-press)}
 
 /* ============================================================
-   MÀN NHẬP LIỆU LỊCH TẢI (đảo chiều — src/views/LichTaiNhap.tsx)
+   SỬA LỊCH TẢI (RouteEditor.tsx) — dùng trong RouteCard.tsx (nút ✎ ngay tại
+   thẻ tuyến) và RegionToolbar (nút "+ Tuyến mới"/"Xuất ra Google Sheet" trong
+   views/LichTai.tsx). Trước đây còn ở màn riêng "✏️ Nhập liệu"
+   (src/views/LichTaiNhap.tsx) — đã bỏ 03/09/2026, thay bằng sửa tại chỗ.
    Dùng lại biến màu sẵn có của dashboard, không thêm hệ màu mới.
    ============================================================ */
 .re-regions { flex-wrap: wrap; }

@@ -2,6 +2,8 @@ import { useEffect, useState, lazy, Suspense, startTransition } from "react";
 import { Header } from "./components/Header";
 import { NavBar } from "./components/NavBar";
 import { SheetTabs } from "./components/SheetTabs";
+import { TeamSidebar, type Team } from "./components/TeamSidebar";
+import { Btbd } from "./views/Btbd";
 import { Overview } from "./views/Overview"; // trang đầu -> nạp ngay
 // Các mục còn lại tách chunk, nạp khi mở (giảm JS ban đầu -> web nhẹ & mở nhanh hơn).
 const LichTai = lazy(() => import("./views/LichTai").then((m) => ({ default: m.LichTai })));
@@ -15,8 +17,6 @@ const DsNcc = lazy(() => import("./views/DsNcc").then((m) => ({ default: m.DsNcc
 const PlanEvent = lazy(() => import("./views/PlanEvent").then((m) => ({ default: m.PlanEvent })));
 const SapLichTai = lazy(() => import("./views/SapLichTai").then((m) => ({ default: m.SapLichTai })));
 const PhanQuyen = lazy(() => import("./views/PhanQuyen").then((m) => ({ default: m.PhanQuyen })));
-// MỚI (đảo chiều): màn nhập liệu đọc/ghi thẳng Supabase — xem src/views/LichTaiNhap.tsx.
-const LichTaiNhap = lazy(() => import("./views/LichTaiNhap").then((m) => ({ default: m.LichTaiNhap })));
 import { QABoard } from "./components/QABoard";
 import { EmailGate } from "./components/EmailGate";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -32,15 +32,20 @@ import type { TopMenu } from "./types";
 
 export default function App() {
   const { user, emailLogin, logout } = useUser();
+  // Team đang xem — 03/09/2026: Sếp quản lý thêm team "Bảo Trì Bảo Dưỡng" (BTBD) ngoài
+  // Linehaul M12 (toàn bộ nội dung hiện tại). Sidebar ngoài cùng (TeamSidebar) chuyển
+  // qua lại, KHÔNG đụng gì vào NavBar ngang/topMenu hiện có — xem render bên dưới.
+  const [team, setTeam] = useState<Team>("linehaul");
   const [topMenu, setTopMenu] = useState<TopMenu>("tong-quan");
   const [sheetKey, setSheetKey] = useState<string>(VISIBLE_SHEETS[0].key);
   const [category, setCategory] = useState<string>("");
   const [search, setSearch] = useState<string>("");
   const [selected, setSelected] = useState<string | null>(null);
   const [mapMode, setMapMode] = useState<"auto" | "mymap">("auto");
-  // sub-tab trong Lịch Tải: Lịch tải (đọc Sheet, bản cũ) | Nhập liệu (Supabase, bản mới) | GSVT | Cổng xuất.
-  // Giữ CẢ HAI trong giai đoạn chuyển đổi để đối chiếu số liệu 2 nguồn trước khi bỏ hẳn nhánh Sheet.
-  const [ltSub, setLtSub] = useState<"lich" | "nhap" | "gsvt" | "cong">("lich");
+  // sub-tab trong Lịch Tải: Lịch tải (Supabase, sửa tại chỗ bằng nút ✎) | GSVT | Cổng xuất.
+  // 03/09/2026: bỏ tab "✏️ Nhập liệu" riêng (đã thay bằng nút ✎ ngay trong RouteCard của
+  // tab Lịch Tải) theo yêu cầu Sếp — xem src/components/RouteCard.tsx.
+  const [ltSub, setLtSub] = useState<"lich" | "gsvt" | "cong">("lich");
   const [tlldSub, setTlldSub] = useState<"tong-quan" | "bao-cao">("tong-quan"); // sub-tab trong TLLD Tuyến: Tổng Quan | Báo Cáo
   // sub-tab trong Plan Event: Kế Hoạch (quyết định hằng ngày) | Chi tiết & Đánh giá (kiểm chứng/tra cứu).
   // CỐ Ý dùng useState thường (không usePersistentState) — luôn reset về "ke-hoach" mỗi lần vào lại
@@ -110,6 +115,12 @@ export default function App() {
   if (!user) return <EmailGate onEmailLogin={emailLogin} />;
 
   return (
+    <div className="team-shell">
+      <TeamSidebar active={team} onChange={setTeam} />
+      <div className="team-content">
+      {team === "btbd" ? (
+        <Btbd />
+      ) : (
     <>
       <Header user={user} onLogout={logout} />
       <NavBar active={topMenu} onChange={(m) => startTransition(() => setTopMenu(m))} />
@@ -134,19 +145,14 @@ export default function App() {
           <>
             <div className="sub-tabs">
               <button className={ltSub === "lich" ? "active" : ""} onClick={() => setLtSub("lich")}>🚚 Lịch Tải</button>
-              <button className={ltSub === "nhap" ? "active" : ""} onClick={() => setLtSub("nhap")}>✏️ Nhập liệu</button>
               <button className={ltSub === "gsvt" ? "active" : ""} onClick={() => setLtSub("gsvt")}>👷 GSVT</button>
               <button className={ltSub === "cong" ? "active" : ""} onClick={() => setLtSub("cong")}>🚪 Cổng Xuất</button>
             </div>
-            {ltSub === "cong" ? <CongXuat /> : ltSub === "gsvt" ? <Gsvt /> : ltSub === "nhap" ? (
-              <LichTaiNhap
-                canEdit={canDo("lich-tai", "edit")}
-                canExport={canDo("lich-tai", "export")}
-              />
-            ) : (
+            {ltSub === "cong" ? <CongXuat /> : ltSub === "gsvt" ? <Gsvt /> : (
               <LichTai
                 data={data}
                 regionLabel={sheet.label}
+                regionKey={sheet.key}
                 refreshing={refreshing}
                 onRefresh={refresh}
                 category={category}
@@ -158,7 +164,8 @@ export default function App() {
                 mapMode={mapMode}
                 setMapMode={setMapMode}
                 gid={sheet.gid}
-                canEdit={user?.roleId === "admin"}
+                canEdit={canDo("lich-tai", "edit")}
+                canExport={canDo("lich-tai", "export")}
                 onSaved={refreshSoon}
                 onSwitchRegion={(g) => { const s = VISIBLE_SHEETS.find((x) => x.gid === g); if (s) setSheetKey(s.key); }}
               />
@@ -220,9 +227,12 @@ export default function App() {
           <button className="foot-logout" onClick={logout}>Đổi tài khoản</button>
         </span>
         <br />
-        © M12SC <span className="dot-sep">·</span> Cụm M12 <span className="dot-sep">·</span> Lịch tải
-        Miền Nam <span className="dot-sep">·</span> Dữ liệu đồng bộ tự động từ Google Sheets
+        © M12SC <span className="dot-sep">·</span> Cụm M12 <span className="dot-sep">·</span> Trang quản lý
+        Linehaul M12 <span className="dot-sep">·</span> Dữ liệu đồng bộ tự động từ Google Sheets
       </footer>
     </>
+      )}
+      </div>
+    </div>
   );
 }

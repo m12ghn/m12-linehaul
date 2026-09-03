@@ -3,7 +3,9 @@ import { normCode } from "../lib/tlld";
 import type { Vehicle } from "../lib/fleet";
 import type { Route } from "../types";
 
-/** Danh sách tuyến + các trạng thái tải/lỗi/rỗng. */
+/** Danh sách tuyến + các trạng thái tải/lỗi/rỗng.
+ *  `id?`: dùng chung cho cả Lịch Tải (DbRoute, có `id`) lẫn GSVT (Route thường, không có) —
+ *  xem CardRoute trong RouteCard.tsx. */
 export function RouteList({
   routes,
   loading,
@@ -12,22 +14,18 @@ export function RouteList({
   onSelect,
   onRetry,
   fleet,
-  gid,
   canEdit,
   onSaved,
-  nccOptions,
 }: {
-  routes: Route[];
+  routes: (Route & { id?: string })[];
   loading: boolean;
   error: string | null;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onRetry: () => void;
   fleet?: Map<string, Vehicle> | null;
-  gid?: string;
   canEdit?: boolean;
   onSaved?: () => void;
-  nccOptions?: string[];
 }) {
   if (loading && routes.length === 0) {
     return (
@@ -75,15 +73,13 @@ export function RouteList({
     <div className="routes">
       {routes.map((r) => (
         <RouteCard
-          key={r.route}
+          key={r.id || r.route}
           route={r}
           open={selectedId === r.route}
           onSelect={() => onSelect(r.route)}
           vehicle={fleet?.get(normCode(r.route))}
-          gid={gid}
           canEdit={canEdit}
           onSaved={onSaved}
-          nccOptions={nccOptions}
         />
       ))}
     </div>
