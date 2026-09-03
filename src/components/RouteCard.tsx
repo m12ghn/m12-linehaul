@@ -53,6 +53,7 @@ export function RouteCard({
   onSelect,
   vehicle,
   canEditRoute = false,
+  khoNames = [],
   onSaved,
 }: {
   route: CardRoute;
@@ -60,6 +61,8 @@ export function RouteCard({
   onSelect: () => void;
   vehicle?: { bks: string; tx: string; sdt: string; ncc: string };
   canEditRoute?: boolean;
+  /** Danh sách tên kho gợi ý khi sửa điểm dừng — truyền tiếp cho RouteEditor (xem đó). */
+  khoNames?: string[];
   onSaved?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -85,6 +88,7 @@ export function RouteCard({
           <RouteEditor
             route={route as DbRoute}
             canEdit={editable}
+            khoNames={khoNames}
             onChanged={() => { onSaved?.(); }}
           />
           <button className="rc-edit-close" onClick={() => setEditing(false)}>✓ Xong, đóng sửa</button>
@@ -156,7 +160,9 @@ export function RouteCard({
                   )}
                   <td className="num">{i + 1}</td>
                   <td className="rc-diem">
-                    {isKho ? "🏠 " : ""}{s.kho || "(Chưa rõ điểm)"}
+                    {isKho ? "🏠 " : ""}
+                    {s.id && <span className="rc-extid">{s.id} - </span>}
+                    {s.kho || "(Chưa rõ điểm)"}
                     {s.kho && !s.coord && <span className="nogeo" title="Chưa có toạ độ">⚠</span>}
                   </td>
                   <td className="rc-type">{s.loaiHinh || "—"}</td>

@@ -23,6 +23,7 @@ import {
   parseBulkGrid, readWorkbookFile, uploadBulkRoutes,
   type BulkParseResult, type BulkUploadResponse,
 } from "../lib/bulkImportLichTai";
+import { SuggestDrop } from "./SuggestDrop";
 
 const LOAI_HINH = ["Phân loại", "Lấy", "Giao", "Giao và lấy"];
 
@@ -42,12 +43,40 @@ function useBusy() {
 }
 
 // ------------------------------------------------------------
+// Ô nhập "Tên kho" có gợi ý (dropdown) — tái dùng SuggestDrop (đã dùng cho ô tìm kiếm
+// Lịch Tải) để gõ vài chữ/số là ra danh sách kho khớp, đỡ gõ sai/trùng tên. Thêm 03/09/2026
+// theo yêu cầu Sếp: "gõ 123 thì suggest dropdown các kho có regex là 123". `khoNames` là
+// danh sách tên kho ĐÃ TỪNG xuất hiện trong vùng (dựng ở LichTai.tsx từ data.routes) — không
+// gọi thêm API nào, tái dùng đúng dữ liệu vùng đang tải sẵn cho khung Lịch Tải.
+// ------------------------------------------------------------
+function KhoInput({
+  value, onChange, khoNames, placeholder,
+}: {
+  value: string; onChange: (v: string) => void; khoNames: string[]; placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="kho-input-box">
+      <input
+        value={value}
+        placeholder={placeholder}
+        autoComplete="off"
+        onChange={(e) => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      <SuggestDrop value={value} names={khoNames} show={open} onPick={(n) => { onChange(n); setOpen(false); }} />
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
 // Một dòng điểm dừng — sửa tại chỗ
 // ------------------------------------------------------------
 function StopRow({
-  stop, index, total, canEdit, onChanged, onMove,
+  stop, index, total, canEdit, khoNames, onChanged, onMove,
 }: {
-  stop: DbStop; index: number; total: number; canEdit: boolean;
+  stop: DbStop; index: number; total: number; canEdit: boolean; khoNames: string[];
   onChanged: () => void; onMove: (dir: -1 | 1) => void;
 }) {
   const [draft, setDraft] = useState({
@@ -61,7 +90,7 @@ function StopRow({
     return (
       <tr>
         <td>{index + 1}</td>
-        <td>{stop.kho}</td><td>{stop.loaiHinh || "—"}</td>
+        <td>{stop.id && <span className="rc-extid">{stop.id} - </span>}{stop.kho}</td><td>{stop.loaiHinh || "—"}</td>
         <td>{stop.toi || "—"}</td><td>{stop.roi || "—"}</td><td />
       </tr>
     );
@@ -71,7 +100,12 @@ function StopRow({
     <>
       <tr className={dirty ? "rc-dirty" : ""}>
         <td>{index + 1}</td>
-        <td><input value={draft.kho} onChange={(e) => setDraft({ ...draft, kho: e.target.value })} placeholder="Tên kho / BC" /></td>
+        <td>
+          {/* ID điểm dừng (cột "ID" cũ trên Sheet) — CHỈ HIỆN, không sửa được ở đây (chưa hỗ
+              trợ ghi ext_id qua API, chỉ nạp được lúc import/tải lên hàng loạt). */}
+          {stop.id && <div className="rc-extid re-kho-id">{stop.id}</div>}
+          <KhoInput value={draft.kho} onChange={(v) => setDraft({ ...draft, kho: v })} khoNames={khoNames} placeholder="Tên kho / BC" />
+        </td>
         <td>
           <select value={draft.loaiHinh} onChange={(e) => setDraft({ ...draft, loaiHinh: e.target.value })}>
             <option value="">—</option>
@@ -103,9 +137,13 @@ function StopRow({
 // Một tuyến — sửa thông tin tuyến + danh sách điểm dừng
 // ------------------------------------------------------------
 export function RouteEditor({
-  route, canEdit, onChanged,
+  route, canEdit, khoNames = [], onChanged,
 }: {
-  route: DbRoute; canEdit: boolean; onChanged: () => void;
+  route: DbRoute; canEdit: boolean;
+  /** Danh sách tên kho đã từng dùng trong vùng — cho ô "Tên kho" gợi ý dropdown khi gõ
+   *  (SuggestDrop, xem KhoInput). Không truyền -> không có gợi ý, không lỗi gì (mặc định []). */
+  khoNames?: string[];
+  onChanged: () => void;
 }) {
   const [draft, setDraft] = useState({
     code: route.route, category: route.category || "",
@@ -164,7 +202,7 @@ export function RouteEditor({
         <tbody>
           {route.stops.map((s, i) => (
             <StopRow key={s.sid} stop={s} index={i} total={route.stops.length}
-              canEdit={canEdit} onChanged={onChanged} onMove={(d) => handleMove(i, d)} />
+              canEdit={canEdit} khoNames={khoNames} onChanged={onChanged} onMove={(d) => handleMove(i, d)} />
           ))}
           {route.stops.length === 0 && (
             <tr><td colSpan={6} className="muted">Tuyến chưa có điểm dừng nào.</td></tr>
@@ -174,8 +212,8 @@ export function RouteEditor({
 
       {canEdit && (adding ? (
         <div className="re-add">
-          <input autoFocus value={newStop.kho} placeholder="Tên kho / BC"
-            onChange={(e) => setNewStop({ ...newStop, kho: e.target.value })} />
+          <KhoInput value={newStop.kho} khoNames={khoNames} placeholder="Tên kho / BC"
+            onChange={(v) => setNewStop({ ...newStop, kho: v })} />
           <select value={newStop.loaiHinh} onChange={(e) => setNewStop({ ...newStop, loaiHinh: e.target.value })}>
             <option value="">—</option>
             {LOAI_HINH.map((v) => <option key={v} value={v}>{v}</option>)}
@@ -261,8 +299,8 @@ function BulkUploadPanel({
         được SỬA (thay toàn bộ điểm dừng cũ), tuyến chưa có sẽ được TẠO MỚI.
       </div>
       <div className="re-bulk-actions">
-        <button type="button" onClick={() => exportLichTai([], regionLabel)}>⬇ Tải file trống (mẫu)</button>
-        <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}>
+        <button type="button" className="re-btn" onClick={() => exportLichTai([], regionLabel)}>⬇ Tải file trống (mẫu)</button>
+        <button type="button" className="re-btn" onClick={() => fileRef.current?.click()} disabled={busy}>
           📄 Chọn file Excel…
         </button>
         <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }}
@@ -283,7 +321,7 @@ function BulkUploadPanel({
             <button className="pl-calc" disabled={busy || !parsed.routes.length} onClick={confirmUpload}>
               {busy ? "Đang tải lên…" : `Xác nhận tải lên ${parsed.routes.length} tuyến`}
             </button>
-            <button type="button" onClick={reset} disabled={busy}>Huỷ</button>
+            <button type="button" className="re-btn" onClick={reset} disabled={busy}>Huỷ</button>
           </div>
         </div>
       )}
@@ -310,7 +348,7 @@ function BulkUploadPanel({
               Không tải lên được: {result.detail || result.error}
             </div>
           )}
-          <button type="button" onClick={reset}>Tải file khác</button>
+          <button type="button" className="re-btn" onClick={reset}>Tải file khác</button>
         </div>
       )}
     </div>
@@ -345,12 +383,12 @@ export function RegionToolbar({
         </button>
       )}
       {canBulkUpload && (
-        <button onClick={() => { setBulkOpen((v) => !v); setOpen(false); }}>
+        <button className="re-btn" onClick={() => { setBulkOpen((v) => !v); setOpen(false); }}>
           {bulkOpen ? "Đóng" : "📤 Tải lên hàng loạt"}
         </button>
       )}
       {canExport && (
-        <button disabled={busy} onClick={async () => {
+        <button className="re-btn" disabled={busy} onClick={async () => {
           setExportMsg("Đang xuất…");
           const r = await exportToSheet(regionKey);
           setExportMsg(r.ok ? `Đã xuất ${r.rows} dòng ra Google Sheet.`

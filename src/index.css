@@ -259,6 +259,9 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .rc-sched-tbl tbody tr:first-child td { border-top: none; }
 .rc-sched-tbl td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .rc-sched-tbl .rc-diem { font-weight: 600; color: var(--ink); word-break: break-word; line-height: 1.3; }
+/* ID điểm dừng (cột "ID" cũ trên Sheet, ext_id) hiện trước tên kho — "1234 - Kho A"
+   (03/09/2026, Sếp yêu cầu phân biệt các kho trùng/gần giống tên nhau). */
+.rc-extid { color: var(--muted); font-weight: 700; }
 .rc-sched-tbl .rc-type { color: var(--muted); white-space: nowrap; }
 .rc-sched-tbl tr.rc-kho .rc-diem { color: var(--orange); }
 .rc-sched-tbl .nogeo { color: var(--red); font-weight: 700; margin-left: 5px; font-size: 11.5px; }
@@ -1872,6 +1875,20 @@ footer .dot-sep { margin: 0 6px; opacity: .5; }
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
   margin-bottom: 14px;
 }
+/* Nút PHỤ (Tải lên hàng loạt / Xuất Google Sheet / các nút trong khung Tải lên hàng loạt) —
+   thêm 03/09/2026 theo yêu cầu Sếp ("cho màu sắc style giống các nút khác"). Trước đó là
+   <button> trần, không class -> ra style mặc định trình duyệt, lệch hẳn với ".pl-calc" (nút
+   chính, cam). Dùng LẠI đúng công thức màu/hover của ".refresh-btn" (viền + nền trắng + chữ
+   xám, hover chuyển cam) — kiểu nút phụ đã dùng khắp dashboard — nhưng bo góc/khoảng đệm theo
+   ".pl-calc" để đứng chung hàng ".re-toolbar"/".re-bulk-actions" cho vừa mắt, không to lệch. */
+.re-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1.5px solid var(--line-2); background: var(--white); color: var(--text-muted);
+  border-radius: 10px; padding: 9px 14px; font-size: 14px; font-weight: 700;
+  cursor: pointer; white-space: nowrap; transition: .15s;
+}
+.re-btn:hover { border-color: var(--orange); color: var(--orange); }
+.re-btn:disabled { opacity: .55; cursor: default; }
 .re-new {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
   width: 100%; padding: 12px; margin-top: 8px;
@@ -1904,6 +1921,12 @@ footer .dot-sep { margin: 0 6px; opacity: .5; }
 .re-stops td:first-child, .re-stops th:first-child { width: 32px; color: var(--muted, var(--text-muted)); }
 .re-stops input, .re-stops select { width: 100%; box-sizing: border-box; }
 .re-stops tr.rc-dirty { background: color-mix(in srgb, var(--orange, var(--color-warning)) 10%, transparent); }
+
+/* Ô "Tên kho" có gợi ý (KhoInput, RouteEditor.tsx) — bọc input để định vị dropdown SuggestDrop
+   (.ac-list là absolute, cần cha position:relative). 03/09/2026. */
+.kho-input-box { position: relative; }
+.re-stops .kho-input-box { width: 100%; }
+.re-kho-id { font-size: 11px; margin-bottom: 2px; }
 
 .rc-actions { display: flex; gap: 4px; white-space: nowrap; width: 1%; }
 .rc-actions button { padding: 2px 7px; font-size: 12px; }

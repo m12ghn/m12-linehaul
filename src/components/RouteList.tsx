@@ -15,6 +15,7 @@ export function RouteList({
   onRetry,
   fleet,
   canEditRoute,
+  khoNames,
   onSaved,
 }: {
   routes: (Route & { id?: string })[];
@@ -26,6 +27,8 @@ export function RouteList({
   fleet?: Map<string, Vehicle> | null;
   /** Chỉ vai trò admin mới true — gate nút "✎ Sửa" trên từng thẻ tuyến (03/09). */
   canEditRoute?: boolean;
+  /** Danh sách tên kho gợi ý khi sửa điểm dừng — truyền tiếp cho RouteCard/RouteEditor. */
+  khoNames?: string[];
   onSaved?: () => void;
 }) {
   if (loading && routes.length === 0) {
@@ -80,6 +83,7 @@ export function RouteList({
           onSelect={() => onSelect(r.route)}
           vehicle={fleet?.get(normCode(r.route))}
           canEditRoute={canEditRoute}
+          khoNames={khoNames}
           onSaved={onSaved}
         />
       ))}

@@ -95,6 +95,13 @@ export function LichTai({
     for (const r of data.routes) { if (r.route) s.add(r.route); if (r.bks) s.add(r.bks); for (const st of r.stops) if (st.kho) s.add(st.kho); }
     return [...s].sort((a, b) => a.localeCompare(b, "vi"));
   }, [data.routes]);
+  // Tên kho ĐÃ TỪNG dùng trong vùng (không lẫn tên tuyến/biển số như sugNames ở trên) — cho ô
+  // "Tên kho" gợi ý dropdown khi sửa/thêm điểm dừng (RouteEditor, 03/09/2026 theo yêu cầu Sếp).
+  const khoNames = useMemo(() => {
+    const s = new Set<string>();
+    for (const r of data.routes) for (const st of r.stops) if (st.kho) s.add(st.kho);
+    return [...s].sort((a, b) => a.localeCompare(b, "vi"));
+  }, [data.routes]);
   const byCat = useMemo(
     () => (category ? data.routes.filter((r) => r.category === category) : data.routes),
     [data.routes, category]
@@ -303,6 +310,7 @@ export function LichTai({
             onRetry={onRefresh}
             fleet={fleet}
             canEditRoute={canEditRoute}
+            khoNames={khoNames}
             onSaved={onSaved}
           />
           {filtered.length > visible ? (
