@@ -5,11 +5,18 @@ import { TlldReport, LongTrend } from "../components/TlldReport";
 import { TlldClusterReport } from "../components/TlldClusterReport";
 import { TlldSucKhoe } from "../components/TlldSucKhoe";
 import { DieuChinhReport } from "../components/DieuChinhReport";
-import { SuggestDrop } from "../components/SuggestDrop";
 import { Collapsible } from "../components/Collapsible";
 import { useTlld, useTlldRegion } from "../lib/useTlld";
 import { useAllRoutes } from "../lib/allRoutes";
-import { normCode, fetchDiemDungChuyen, type TlldRoute, type TlldDiemDung } from "../lib/tlld";
+import {
+  normCode,
+  fetchDiemDungChuyen,
+  fetchTlldRange,
+  addDaysISO,
+  type TlldRoute,
+  type TlldDiemDung,
+  type TlldRangeRow,
+} from "../lib/tlld";
 import { normSearch } from "../lib/normalize";
 import { CATEGORY_LABELS } from "../config";
 import type { Route, SheetData } from "../types";
@@ -21,6 +28,12 @@ function ddmm(iso: string | null): string {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y.slice(2)}`;
+}
+/** Hôm nay theo giờ LOCAL, dạng YYYY-MM-DD — dùng làm mặc định "Đến ngày" khi bấm Tra cứu mà
+ *  chưa chọn khoảng ngày (thêm 03/09/2026, bộ lọc Tra cứu TLLD Tuyến). */
+function todayISO(): string {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
 type TRow = { route: Route; tlld?: TlldRoute };
@@ -73,17 +86,19 @@ export function TlldTuyen({
   regionLabel,
   category,
   setCategory,
-  search,
-  setSearch,
+  search: _search,
+  setSearch: _setSearch,
   view = "tong-quan",
 }: {
   data: SheetData;
   regionLabel: string;
   category: string;
   setCategory: (c: string) => void;
+  /** Không còn dùng để lọc TLLD Tuyến nữa (03/09 — Sếp chọn thay hẳn bằng bộ lọc Tra cứu riêng bên
+   *  dưới), vẫn khai báo vì App.tsx truyền chung state này cho cả Lịch Tải lẫn TLLD Tuyến. */
   search: string;
   setSearch: (s: string) => void;
-  /** Sub-tab trong "TLLD Tuyến": "tong-quan" = KPI + duyệt/tìm tuyến (như cũ);
+  /** Sub-tab trong "TLLD Tuyến": "tong-quan" = KPI + duyệt tuyến (như cũ);
    *  "bao-cao" = chỉ biểu đồ tổng hợp + nhận định AI (TlldReport), gọn cho việc đọc báo cáo nhanh. */
   view?: "tong-quan" | "bao-cao";
 }) {
@@ -93,41 +108,89 @@ export function TlldTuyen({
   // Mã tuyến (scheduler_name) thuộc ĐÚNG vùng/tab Lịch Tải đang chọn — dùng để LỌC khung "🩺 Sức
   // khoẻ vận hành TLLD" theo vùng (Sếp yêu cầu 01/09: đổi tab vùng phải đổi số, trước đó khung này
   // cố ý xem TOÀN CỤM nên đổi tab không đổi số — nay đổi lại theo đúng ý). Lấy từ `data.routes`
-  // (toàn bộ tuyến của vùng đang chọn, CHƯA lọc loại tuyến/tìm kiếm — khung Sức khoẻ nằm TRÊN
-  // CategoryTabs nên chỉ lọc theo vùng, không theo loại tuyến).
+  // (toàn bộ tuyến của vùng đang chọn, CHƯA lọc loại tuyến — khung Sức khoẻ nằm TRÊN CategoryTabs
+  // nên chỉ lọc theo vùng, không theo loại tuyến).
   const regionCodes = useMemo(
     () => new Set(data.routes.map((r) => normCode(r.route)).filter(Boolean)),
     [data.routes]
   );
   const { index: regionIndex } = useTlldRegion(regionCodes);
 
-  // Gợi ý tên tuyến / bưu cục cho ô tìm kiếm.
-  const [sugOpen, setSugOpen] = useState(false);
-  const sugNames = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of allRoutes.values()) { if (r.route) s.add(r.route); if (r.bks) s.add(r.bks); for (const st of r.stops) if (st.kho) s.add(st.kho); }
-    return [...s].sort((a, b) => a.localeCompare(b, "vi"));
-  }, [allRoutes]);
+  // ============================================================================================
+  // BỘ LỌC "TRA CỨU" (khoảng ngày từ-đến + mã tuyến + mã chuyến) — thêm 03/09/2026, THAY HẲN ô tìm
+  // kiếm chung cũ của trang này (Sếp chọn qua AskUserQuestion: "Thay hẳn ô tìm kiếm cũ"). CHỈ DÙNG
+  // ĐỂ TRA CỨU (phương án khuyến nghị Sếp chọn) — TÁCH RIÊNG hoàn toàn khỏi index/regionIndex ở
+  // trên: khung "🩺 Sức khoẻ vận hành TLLD", KPI vùng, và danh sách 2 cột cảnh báo bên dưới VẪN
+  // tính như cũ (cuốn chiếu quanh "hôm nay", KHÔNG đổi theo bộ lọc này). Bộ lọc gọi RIÊNG
+  // fetchTlldRange() (1 lần gọi /api/tlld-live?tu=&den= mỗi lần tra cứu), dựng 1 khu vực kết quả
+  // RIÊNG bên dưới — không ghi đè rows/columns/withData mà các khung phía trên đang dùng.
+  // ============================================================================================
+  const [fFrom, setFFrom] = useState("");
+  const [fTo, setFTo] = useState("");
+  const [fMaTuyen, setFMaTuyen] = useState("");
+  const [fMaChuyen, setFMaChuyen] = useState("");
+  const [lookupRows, setLookupRows] = useState<TlldRangeRow[] | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupErr, setLookupErr] = useState<string | null>(null);
+  const lookupTouched = !!(fFrom || fTo || fMaTuyen.trim() || fMaChuyen.trim());
 
-  // Tra cứu CHI TIẾT CHUYẾN khi gõ đúng mã chuyến (ma_chuyen)
-  const chuyenHit = index && search.trim() ? index.byChuyen.get(search.trim().toUpperCase()) : undefined;
+  async function runLookup(over?: { from?: string; to?: string; maTuyen?: string; maChuyen?: string }) {
+    const from = over?.from ?? fFrom;
+    const to = over?.to ?? fTo;
+    const maTuyen = over?.maTuyen ?? fMaTuyen;
+    const maChuyen = over?.maChuyen ?? fMaChuyen;
+    if (!from && !to && !maTuyen.trim() && !maChuyen.trim()) { setLookupRows(null); setLookupErr(null); return; }
+    setLookupLoading(true); setLookupErr(null);
+    try {
+      // Chưa chọn ngày nào -> mặc định 30 ngày gần nhất (kể cả hôm nay), tránh kéo cả lịch sử.
+      const to2 = to || todayISO();
+      const from2 = from || addDaysISO(to2, -29);
+      const den = addDaysISO(to2, 1); // API lọc nửa khoảng [tu, den) -> +1 ngày để BAO GỒM "Đến ngày"
+      const raw = await fetchTlldRange(from2, den);
+      const codeQ = normCode(maTuyen);
+      const chQ = normSearch(maChuyen);
+      let out = raw.filter((r) => {
+        if (codeQ && !normCode(r.maTuyen).includes(codeQ)) return false;
+        if (chQ && !normSearch(r.maChuyen).includes(chQ)) return false;
+        return true;
+      });
+      out = out.sort((a, b) => b.ngay.localeCompare(a.ngay) || a.maChuyen.localeCompare(b.maChuyen));
+      setLookupRows(out);
+    } catch (e) {
+      setLookupErr(e instanceof Error ? e.message : String(e));
+      setLookupRows(null);
+    } finally {
+      setLookupLoading(false);
+    }
+  }
+  function clearLookup() {
+    setFFrom(""); setFTo(""); setFMaTuyen(""); setFMaChuyen("");
+    setLookupRows(null); setLookupErr(null);
+  }
+  // Bấm chip "Tuyến lấp đầy <60%" ở KPI (bên dưới) -> tra cứu NGAY tuyến đó, mặc định 30 ngày gần nhất.
+  function lookupRouteChip(code: string) {
+    setFMaTuyen(code); setFMaChuyen(""); setFFrom(""); setFTo("");
+    runLookup({ maTuyen: code, maChuyen: "", from: "", to: "" });
+  }
 
-  // Xem TLLD theo TỪNG ĐIỂM DỪNG của chuyến đang tra (chuyenHit) — bấm mở, tải theo yêu cầu, KHÔNG
-  // tải sẵn (cùng cách làm với TlldSucKhoe.tsx). Trả lời câu hỏi Sếp 01/09: "xem TLLD theo điểm dừng
-  // và full trip" — thẻ chuyenHit ở trên đã là góc nhìn FULL TRIP, phần này thêm góc nhìn ĐIỂM DỪNG
-  // cho ĐÚNG chuyến đang tra cứu (không chỉ riêng các chuyến TLLD thấp như khung Sức khoẻ).
+  // Đúng 1 chuyến khớp bộ lọc -> coi là "đang tra 1 chuyến cụ thể", hiện thẻ chi tiết FULL TRIP.
+  const lookupHit = lookupRows && lookupRows.length === 1 ? lookupRows[0] : null;
+  const lookupHitRouteText = lookupHit ? index?.byCode.get(normCode(lookupHit.maTuyen))?.routeText : undefined;
+
+  // Xem TLLD theo TỪNG ĐIỂM DỪNG của chuyến đang tra (lookupHit) — bấm mở, tải theo yêu cầu, KHÔNG
+  // tải sẵn (cùng cách làm với TlldSucKhoe.tsx).
   const [diemOpen, setDiemOpen] = useState(false);
   const [diemRows, setDiemRows] = useState<TlldDiemDung[] | null>(null);
   const [diemLoading, setDiemLoading] = useState(false);
   const [diemErr, setDiemErr] = useState<string | null>(null);
-  useEffect(() => { setDiemOpen(false); setDiemRows(null); setDiemErr(null); }, [chuyenHit?.maChuyen]);
-  async function toggleDiemChuyenHit() {
+  useEffect(() => { setDiemOpen(false); setDiemRows(null); setDiemErr(null); }, [lookupHit?.maChuyen]);
+  async function toggleDiemLookupHit() {
     if (diemOpen) { setDiemOpen(false); return; }
     setDiemOpen(true);
     if (diemRows || diemLoading) return; // đã tải/đang tải rồi -> khỏi gọi lại
     setDiemLoading(true); setDiemErr(null);
     try {
-      setDiemRows(await fetchDiemDungChuyen(chuyenHit!.maChuyen));
+      setDiemRows(await fetchDiemDungChuyen(lookupHit!.maChuyen));
     } catch (e) {
       setDiemErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -135,36 +198,15 @@ export function TlldTuyen({
     }
   }
 
-  const q = normSearch(search);
-  const qBks = search.toLowerCase().replace(/[^a-z0-9]/g, ""); // biển số: bỏ "-"/khoảng trắng -> khớp "50H26441" ~ "50H-26441" ~ "26441"
-  // ID bưu cục (cột "ID" trong Sheet) — CHỈ coi là tìm theo ID khi cả câu tìm (bỏ khoảng trắng/dấu
-  // gạch/chấm) là số THUẦN, ≥4 chữ số. Nếu chỉ lấy bừa mọi chữ số có trong câu (kể cả tên riêng có
-  // số như "An Lạc 2") thì 1 chữ số lẻ sẽ khớp ID của gần như MỌI tuyến -> ra cả trăm tuyến sai.
-  const qIdRaw = search.trim().replace(/[\s.\-]/g, "");
-  const qId = qIdRaw.length >= 4 && /^\d+$/.test(qIdRaw) ? qIdRaw : "";
-
+  // ============================================================================================
+  // Danh sách tuyến theo VÙNG + LOẠI TUYẾN đang chọn (KPI + 2 cột cảnh báo) — KHÔNG lọc theo bộ lọc
+  // Tra cứu ở trên (đúng nguyên tắc "chỉ dùng để tra cứu"): luôn hiện ĐỦ tuyến của vùng/loại tuyến
+  // đang chọn, y hệt hành vi "duyệt" trước đây khi ô tìm kiếm cũ còn trống.
+  // ============================================================================================
   const byCat = useMemo(
     () => (category ? data.routes.filter((r) => r.category === category) : data.routes),
     [data.routes, category]
   );
-
-  // Khi có từ khoá: tìm trên TOÀN VÙNG (bỏ qua lọc loại tuyến) để mã chuyến/mã
-  // tuyến/BIỂN SỐ luôn ra kết quả dù đang đứng ở tab loại tuyến nào.
-  const filtered = useMemo(() => {
-    if (!q) return byCat;
-    return data.routes.filter((r) => {
-      if (normSearch(r.route).includes(q)) return true;
-      if (r.stops.some((s) => normSearch(s.kho).includes(q))) return true;
-      if (qId && r.stops.some((s) => s.id && s.id.includes(qId))) return true;
-      // khớp BIỂN SỐ (lấy từ lịch tải toàn vùng theo mã tuyến)
-      const bks = allRoutes.get(normCode(r.route))?.bks;
-      if (qBks && bks && bks.toLowerCase().replace(/[^a-z0-9]/g, "").includes(qBks)) return true;
-      // khớp theo mã chuyến (ma_chuyen) lấy từ dữ liệu TLLD của tuyến
-      const t = index?.byCode.get(normCode(r.route));
-      if (t?.chuyen.some((c) => normSearch(c).includes(q))) return true;
-      return false;
-    });
-  }, [data.routes, byCat, q, qId, qBks, allRoutes, index]);
 
   // Bổ sung lộ trình (giờ tới/rời, loại hình) + tải trọng từ lịch TOÀN VÙNG cho 1 tuyến, rồi ghép
   // TLLD theo mã tuyến — TÍNH 1 LẦN mỗi khi input thật sự đổi (KHÔNG mỗi lần render do cuộn trang
@@ -181,20 +223,8 @@ export function TlldTuyen({
         stops: hasTimesHere ? r.stops : (g.stops.length ? g.stops : r.stops),
       };
     };
-    const out: TRow[] = filtered.map((r) => ({ route: enrich(r), tlld: index?.byCode.get(normCode(r.route)) }));
-    // Khi tìm kiếm: bổ sung các mã tuyến CHỈ có trong dữ liệu TLLD (không lên lịch ở
-    // sheet chính) nếu khớp mã tuyến hoặc mã chuyến — dựng card từ chỉ mục TLLD.
-    if (q && index) {
-      const have = new Set(filtered.map((r) => normCode(r.route)));
-      for (const [code, t] of index.byCode) {
-        if (have.has(code)) continue;
-        const hit = normSearch(code).includes(q) || t.chuyen.some((c) => normSearch(c).includes(q));
-        if (!hit) continue;
-        out.push({ route: enrich({ route: code, load: "", category: "", stops: [], mappedCount: 0 }), tlld: t });
-      }
-    }
-    return out;
-  }, [filtered, allRoutes, index, q]);
+    return byCat.map((r) => ({ route: enrich(r), tlld: index?.byCode.get(normCode(r.route)) }));
+  }, [byCat, allRoutes, index]);
 
   // KPI vùng (chỉ tính tuyến có dữ liệu)
   const withData = useMemo(() => rows.filter((x) => x.tlld && (x.tlld.n1 != null || x.tlld.avg7 != null)), [rows]);
@@ -211,19 +241,16 @@ export function TlldTuyen({
   );
   const lowCount = lowRoutes.length;
 
-  // Chế độ DUYỆT (không tìm kiếm) -> 3 cột cảnh báo cân bằng. Tìm kiếm -> danh sách phẳng.
-  const searching = !!q || !!chuyenHit;
-  const columns = useMemo(() => (searching ? null : buildColumns(rows)), [searching, rows]);
+  const columns = useMemo(() => buildColumns(rows), [rows]);
 
   const PAGE = 30;
   const [visible, setVisible] = useState(PAGE);
   const frameRef = useRef<HTMLDivElement>(null);
-  const shown = rows.slice(0, visible);
 
   useEffect(() => {
     setVisible(PAGE);
     if (frameRef.current) frameRef.current.scrollTop = 0;
-  }, [category, search, regionLabel]);
+  }, [category, regionLabel]);
 
   // Lăn chuột / kéo thanh trong khung tới gần đáy -> hiện thêm.
   function onListScroll() {
@@ -269,7 +296,7 @@ export function TlldTuyen({
             items={withData.map((x) => ({ code: x.route.route, tlld: x.tlld! }))}
             index={index}
             regionLabel={regionLabel}
-            catLabel={search.trim() ? `Kết quả tìm "${search.trim()}"` : category ? (CATEGORY_LABELS[category] || category) : "Tất cả tuyến"}
+            catLabel={category ? (CATEGORY_LABELS[category] || category) : "Tất cả tuyến"}
           />
         </Collapsible>
       </>
@@ -281,14 +308,15 @@ export function TlldTuyen({
       {/* SỨC KHOẺ VẬN HÀNH TLLD — LỌC THEO VÙNG đang chọn (regionIndex, đổi theo sheetKey/tab —
           Sếp yêu cầu 01/09), KHÔNG còn xem toàn cụm như bản đầu. Xem src/components/TlldSucKhoe.tsx
           + useTlldRegion() ở lib/useTlld.ts. Đặt TRÊN CÙNG vì đây là bức tranh tổng của vùng trước
-          khi duyệt/tìm từng tuyến + lọc thêm loại tuyến ở khung phía dưới. */}
+          khi duyệt từng tuyến + lọc thêm loại tuyến ở khung phía dưới. KHÔNG bị ảnh hưởng bởi bộ lọc
+          Tra cứu bên dưới (03/09 — chỉ dùng để tra cứu, không đụng khung này). */}
       <TlldSucKhoe index={regionIndex} />
 
       <div className="kpi-row tlld" style={{ marginTop: 16 }}>
         <div className="kpi">
           <div className="lbl">Tuyến có dữ liệu TLLD</div>
           <div className="val orange">{withData.length}</div>
-          <div className="note">/ {filtered.length} tuyến vùng này</div>
+          <div className="note">/ {byCat.length} tuyến vùng này</div>
         </div>
         <div className="kpi blue">
           <div className="lbl">TB lấp đầy N-1</div>
@@ -314,8 +342,8 @@ export function TlldTuyen({
                 <button
                   key={x.code}
                   className="low-chip"
-                  title={`${x.code} · ${pct(x.val)} — bấm để lọc`}
-                  onClick={() => setSearch(x.code)}
+                  title={`${x.code} · ${pct(x.val)} — bấm để tra cứu`}
+                  onClick={() => lookupRouteChip(x.code)}
                 >
                   {x.code} <b>{pct(x.val)}</b>
                 </button>
@@ -333,29 +361,43 @@ export function TlldTuyen({
         onChange={setCategory}
       />
 
-      <div className="toolbar">
-        <div className="search-box">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Tìm theo mã tuyến, mã chuyến, tên hoặc ID bưu cục…"
-            value={search ?? ""}
-            onChange={(e) => { setSearch(e.target.value); setSugOpen(true); }}
-            onFocus={() => setSugOpen(true)}
-            onBlur={() => setTimeout(() => setSugOpen(false), 150)}
-            autoComplete="off"
-          />
-          {search && (
-            <button type="button" className="search-clear" title="Xoá tìm kiếm" onClick={() => setSearch("")}
-              style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 20, lineHeight: 1, color: "var(--muted)", padding: "0 6px" }}>×</button>
+      {/* BỘ LỌC "TRA CỨU" — thay ô tìm kiếm cũ, đóng băng ở đầu khi cuộn trang (Sếp yêu cầu 03/09). */}
+      <div className="toolbar tlld-lookup-bar">
+        <div className="tlld-lookup-fields">
+          <label className="tlld-lookup-f">
+            <span>Từ ngày</span>
+            <input type="date" value={fFrom} max={fTo || undefined} onChange={(e) => setFFrom(e.target.value)} />
+          </label>
+          <label className="tlld-lookup-f">
+            <span>Đến ngày</span>
+            <input type="date" value={fTo} min={fFrom || undefined} onChange={(e) => setFTo(e.target.value)} />
+          </label>
+          <label className="tlld-lookup-f">
+            <span>Mã tuyến</span>
+            <input
+              type="text"
+              placeholder="VD: HCM01-…"
+              value={fMaTuyen}
+              onChange={(e) => setFMaTuyen(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") runLookup(); }}
+            />
+          </label>
+          <label className="tlld-lookup-f">
+            <span>Mã chuyến</span>
+            <input
+              type="text"
+              placeholder="VD: CH…"
+              value={fMaChuyen}
+              onChange={(e) => setFMaChuyen(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") runLookup(); }}
+            />
+          </label>
+          <button type="button" className="refresh-btn" onClick={() => runLookup()} disabled={lookupLoading}>
+            {lookupLoading ? "Đang tra…" : "🔎 Tra cứu"}
+          </button>
+          {lookupTouched && (
+            <button type="button" className="refresh-btn" onClick={clearLookup}>Xoá lọc</button>
           )}
-          <SuggestDrop value={search ?? ""} names={sugNames} show={sugOpen} onPick={(n) => { setSearch(n); setSugOpen(false); }} />
-        </div>
-        <div className="res-count">
-          Kết quả: <b>{rows.length}</b> tuyến
         </div>
         <button className={"refresh-btn" + (loading ? " spin" : "")} onClick={refresh} disabled={loading}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -385,83 +427,130 @@ export function TlldTuyen({
         </span>
       </div>
 
-      {chuyenHit && (
-        <div className="section-card chuyen-card">
-          <div className="chuyen-top">
-            <div>
-              <div className="chuyen-lbl">🔎 Chi tiết chuyến (FULL TRIP)</div>
-              <div className="chuyen-code">{chuyenHit.maChuyen}</div>
-            </div>
-            <div className="chuyen-tlld">
-              <div className="big" style={{ color: fillColor(chuyenHit.tlldWeight) }}>{pct(chuyenHit.tlldWeight)}</div>
-              <div className="cap">TLLD khối lượng</div>
-            </div>
-          </div>
-          {chuyenHit.routeText && <div className="chuyen-route">🛣️ {chuyenHit.routeText}</div>}
-          <div className="chuyen-grid">
-            <div><span>Mã tuyến</span><b>{chuyenHit.code || "—"}</b></div>
-            <div><span>Ngày</span><b>{ddmm(chuyenHit.date || null)}</b></div>
-            <div><span>Loại tải</span><b>{chuyenHit.loaiTai || "—"}</b></div>
-            <div><span>TLLD Volume (số đơn)</span><b style={{ color: fillColor(chuyenHit.tlldVol) }}>{pct(chuyenHit.tlldVol)}</b></div>
-            <div><span>Số đơn</span><b>{chuyenHit.soDon || "—"}</b></div>
-            <div><span>Khối lượng</span><b>{chuyenHit.kg ? chuyenHit.kg + " kg" : "—"}</b></div>
-            <div><span>Biển số xe</span><b>{chuyenHit.bienSo || "—"}</b></div>
-            <div><span>Đối tác / Xe</span><b>{[chuyenHit.partner, chuyenHit.truckCap].filter(Boolean).join(" · ") || "—"}</b></div>
-          </div>
-          <button type="button" className="cat-chip" style={{ marginTop: 10 }} onClick={toggleDiemChuyenHit}>
-            {diemOpen ? "▾" : "▸"} Xem theo TỪNG ĐIỂM DỪNG
-          </button>
-          {diemOpen && (
-            <div style={{ marginTop: 8 }}>
-              {diemLoading ? (
-                <span style={{ color: "var(--muted)" }}>Đang tải chi tiết điểm dừng…</span>
-              ) : diemErr ? (
-                <span style={{ color: "var(--red)" }}>Lỗi tải điểm dừng: {diemErr}</span>
-              ) : !diemRows || diemRows.length === 0 ? (
-                <span style={{ color: "var(--muted)" }}>Không có dữ liệu điểm dừng.</span>
+      {/* KẾT QUẢ TRA CỨU — chỉ hiện khi có nhập ít nhất 1 trong 4 ô lọc phía trên. Hoàn toàn TÁCH
+          RIÊNG khỏi index/rows/columns (khung Sức khoẻ + KPI + 2 cột cảnh báo phía trên/dưới không
+          đổi theo khu vực này). */}
+      {lookupTouched && (
+        <div className="section-card tlld-lookup-results" style={{ marginTop: 12 }}>
+          <div className="tlld-lookup-results-head">
+            <b>🔍 Kết quả tra cứu</b>
+            <span className="res-count">
+              {lookupLoading ? (
+                "Đang tra…"
+              ) : lookupErr ? (
+                <span style={{ color: "var(--red)" }}>Lỗi tra cứu: {lookupErr}</span>
               ) : (
-                <div className="tc-wrap scroll-frame">
-                  <table className="tc-grid" style={{ width: "100%" }}>
-                    <thead>
-                      <tr><th>#</th><th>Kho</th><th>Loại tải</th><th>TLLD KL (điểm)</th><th>TLLD VOL (điểm)</th><th>Khối lượng</th><th>Số đơn</th></tr>
-                    </thead>
-                    <tbody>
-                      {diemRows.map((d) => (
-                        <tr key={d.thuTu}>
-                          <td className="num">{d.thuTu}</td>
-                          <td>{d.kho || "—"}</td>
-                          <td>{d.loaiTai || "—"}</td>
-                          <td className="num" style={{ color: fillColor(d.tlldWeightDiem) }}>{pct(d.tlldWeightDiem)}</td>
-                          <td className="num" style={{ color: fillColor(d.tlldVolDiem) }}>{pct(d.tlldVolDiem)}</td>
-                          <td className="num">{d.khoiluongKg != null ? d.khoiluongKg + " kg" : "—"}</td>
-                          <td className="num">{d.soDonHang ?? "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <>Tìm thấy <b>{lookupRows?.length ?? 0}</b> chuyến</>
+              )}
+            </span>
+          </div>
+
+          {!lookupLoading && !lookupErr && lookupHit && (
+            <div className="chuyen-card" style={{ marginTop: 10, marginBottom: 0, paddingLeft: 12 }}>
+              <div className="chuyen-top">
+                <div>
+                  <div className="chuyen-lbl">🔎 Chi tiết chuyến (FULL TRIP)</div>
+                  <div className="chuyen-code">{lookupHit.maChuyen}</div>
+                </div>
+                <div className="chuyen-tlld">
+                  <div className="big" style={{ color: fillColor(lookupHit.tlldWeight) }}>{pct(lookupHit.tlldWeight)}</div>
+                  <div className="cap">TLLD khối lượng</div>
+                </div>
+              </div>
+              {lookupHitRouteText && <div className="chuyen-route">🛣️ {lookupHitRouteText}</div>}
+              <div className="chuyen-grid">
+                <div><span>Mã tuyến</span><b>{lookupHit.maTuyen || "—"}</b></div>
+                <div><span>Ngày</span><b>{ddmm(lookupHit.ngay)}</b></div>
+                <div><span>Loại tải</span><b>{lookupHit.loaiTai || "—"}</b></div>
+                <div><span>TLLD Volume (số đơn)</span><b style={{ color: fillColor(lookupHit.tlldVol) }}>{pct(lookupHit.tlldVol)}</b></div>
+                <div><span>Số đơn</span><b>{lookupHit.soDon || "—"}</b></div>
+                <div><span>Khối lượng</span><b>{lookupHit.kg ? lookupHit.kg + " kg" : "—"}</b></div>
+                <div><span>Biển số xe</span><b>{lookupHit.bienSo || "—"}</b></div>
+                <div><span>Đối tác / Xe</span><b>{[lookupHit.partner, lookupHit.truckCap].filter(Boolean).join(" · ") || "—"}</b></div>
+              </div>
+              <button type="button" className="cat-chip" style={{ marginTop: 10 }} onClick={toggleDiemLookupHit}>
+                {diemOpen ? "▾" : "▸"} Xem theo TỪNG ĐIỂM DỪNG
+              </button>
+              {diemOpen && (
+                <div style={{ marginTop: 8 }}>
+                  {diemLoading ? (
+                    <span style={{ color: "var(--muted)" }}>Đang tải chi tiết điểm dừng…</span>
+                  ) : diemErr ? (
+                    <span style={{ color: "var(--red)" }}>Lỗi tải điểm dừng: {diemErr}</span>
+                  ) : !diemRows || diemRows.length === 0 ? (
+                    <span style={{ color: "var(--muted)" }}>Không có dữ liệu điểm dừng.</span>
+                  ) : (
+                    <div className="tc-wrap scroll-frame">
+                      <table className="tc-grid" style={{ width: "100%" }}>
+                        <thead>
+                          <tr><th>#</th><th>Kho</th><th>Loại tải</th><th>TLLD KL (điểm)</th><th>TLLD VOL (điểm)</th><th>Khối lượng</th><th>Số đơn</th></tr>
+                        </thead>
+                        <tbody>
+                          {diemRows.map((d) => (
+                            <tr key={d.thuTu}>
+                              <td className="num">{d.thuTu}</td>
+                              <td>{d.kho || "—"}</td>
+                              <td>{d.loaiTai || "—"}</td>
+                              <td className="num" style={{ color: fillColor(d.tlldWeightDiem) }}>{pct(d.tlldWeightDiem)}</td>
+                              <td className="num" style={{ color: fillColor(d.tlldVolDiem) }}>{pct(d.tlldVolDiem)}</td>
+                              <td className="num">{d.khoiluongKg != null ? d.khoiluongKg + " kg" : "—"}</td>
+                              <td className="num">{d.soDonHang ?? "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
+
+          {!lookupLoading && !lookupErr && lookupRows && lookupRows.length > 1 && (
+            <div className="tc-wrap scroll-frame" style={{ marginTop: 10 }}>
+              <table className="tc-grid" style={{ width: "100%" }}>
+                <thead>
+                  <tr>
+                    <th>Ngày</th><th>Mã chuyến</th><th>Mã tuyến</th><th>Loại tải</th><th>Hub</th>
+                    <th>TLLD KL</th><th>TLLD VOL</th><th>Khối lượng</th><th>Số đơn</th><th>Biển số</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lookupRows.slice(0, 300).map((r) => (
+                    <tr key={r.ngay + "|" + r.maChuyen} onClick={() => { setFMaChuyen(r.maChuyen); runLookup({ maChuyen: r.maChuyen }); }}>
+                      <td className="num">{ddmm(r.ngay)}</td>
+                      <td>{r.maChuyen}</td>
+                      <td>{r.maTuyen || "—"}</td>
+                      <td>{r.loaiTai || "—"}</td>
+                      <td>{r.hub || "—"}</td>
+                      <td className="num" style={{ color: fillColor(r.tlldWeight) }}>{pct(r.tlldWeight)}</td>
+                      <td className="num" style={{ color: fillColor(r.tlldVol) }}>{pct(r.tlldVol)}</td>
+                      <td className="num">{r.kg ? r.kg + " kg" : "—"}</td>
+                      <td className="num">{r.soDon || "—"}</td>
+                      <td>{r.bienSo || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {lookupRows.length > 300 && (
+                <div className="list-frame-note">
+                  Chỉ hiện 300/{lookupRows.length} chuyến đầu — thu hẹp khoảng ngày hoặc nhập thêm mã để lọc chính xác hơn.
+                </div>
+              )}
+            </div>
+          )}
+
+          {!lookupLoading && !lookupErr && lookupRows && lookupRows.length === 0 && (
+            <div className="tlld-empty" style={{ marginTop: 10 }}>Không tìm thấy chuyến nào khớp bộ lọc.</div>
+          )}
         </div>
       )}
 
-      {rows.length === 0 && !chuyenHit ? (
+      {rows.length === 0 ? (
         <div className="tlld-empty">Không có tuyến phù hợp ở vùng/loại tuyến này.</div>
-      ) : searching ? (
-        // TÌM KIẾM: danh sách phẳng + cuộn vô hạn (giữ như cũ).
-        <div className="list-frame" ref={frameRef} onScroll={onListScroll}>
-          <div className="tlld-list">
-            {shown.map((x) => <TlldCard key={x.route.route} route={x.route} tlld={x.tlld} />)}
-          </div>
-          {rows.length > visible ? (
-            <div className="list-frame-note">⌄ Lăn xuống để xem thêm {rows.length - visible} tuyến…</div>
-          ) : rows.length > PAGE ? (
-            <div className="list-frame-note done">Đã hiện hết {rows.length} tuyến</div>
-          ) : null}
-        </div>
       ) : (
-        // DUYỆT: 2 cột cảnh báo (cực thấp / quá tải) + tuyến còn lại rải cân bằng.
+        // DUYỆT: 2 cột cảnh báo (cực thấp / quá tải) + tuyến còn lại rải cân bằng. Luôn ở chế độ
+        // này (03/09 — bỏ chế độ "tìm kiếm" cũ, xem bộ lọc Tra cứu riêng ở trên).
         // Phân trang: chỉ render `visible` card mỗi cột (lăn xuống tải thêm) -> NHẸ, không dựng cả 555 card.
         <div className="list-frame" ref={frameRef} onScroll={onListScroll}>
           <style>{`
@@ -480,7 +569,7 @@ export function TlldTuyen({
             .tlld-col .tlld-route{overflow-x:auto}
           `}</style>
           <div className="tlld-cols">
-            {columns!.map((c) => (
+            {columns.map((c) => (
               <div key={c.key} className="tlld-col">
                 <div className="tlld-col-h">
                   <div className="t">{c.title} <span className="c">({c.warn.length})</span></div>
@@ -502,7 +591,7 @@ export function TlldTuyen({
             ))}
           </div>
           {(() => {
-            const maxCol = Math.max(0, ...columns!.map((c) => c.items.length));
+            const maxCol = Math.max(0, ...columns.map((c) => c.items.length));
             return maxCol > visible ? (
               <div className="list-frame-note">⌄ Lăn xuống để xem thêm {maxCol - visible} tuyến mỗi cột…</div>
             ) : rows.length > PAGE ? (
@@ -513,13 +602,13 @@ export function TlldTuyen({
       )}
 
       {/* Xu hướng lấp đầy DÀI HẠN (Tuần/14/30/60 ngày) của ĐÚNG nhóm đang lọc — đặt DƯỚI CÙNG trang
-          Tổng Quan (sau danh sách tuyến) theo yêu cầu Sếp; tự đổi theo vùng/loại tuyến/tìm kiếm. */}
+          Tổng Quan (sau danh sách tuyến) theo yêu cầu Sếp; tự đổi theo vùng/loại tuyến. */}
       {index && withData.length > 0 && (
         <LongTrend
           items={withData.map((x) => ({ code: x.route.route, tlld: x.tlld! }))}
           index={index}
           detailed
-          scopeLabel={`${regionLabel} · ${search.trim() ? `Kết quả tìm "${search.trim()}"` : category ? (CATEGORY_LABELS[category] || category) : "Tất cả tuyến"}`}
+          scopeLabel={`${regionLabel} · ${category ? (CATEGORY_LABELS[category] || category) : "Tất cả tuyến"}`}
         />
       )}
     </>

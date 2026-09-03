@@ -73,7 +73,8 @@ export interface EventWindow {
   range: string; // vd "06/06–11/06"
   dates: string[]; // 6 ngày YYYY-MM-DD
 }
-function addDaysISO(iso: string, n: number): string {
+/** Export cho TlldTuyen.tsx (bộ lọc tra cứu khoảng ngày, thêm 03/09) — cộng/trừ ngày trên chuỗi ISO. */
+export function addDaysISO(iso: string, n: number): string {
   const [y, m, d] = iso.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
   dt.setUTCDate(dt.getUTCDate() + n);
@@ -162,6 +163,56 @@ async function fetchTlldLive(signal?: AbortSignal): Promise<DongChuyenApi[]> {
   const d = await res.json();
   if (!d?.ok) throw new Error(d?.detail || d?.error || "tlld_live_loi");
   return (d.rows || []) as DongChuyenApi[];
+}
+
+/** 1 dòng CHUYẾN trả về cho bộ lọc "Tra cứu" TLLD Tuyến (khoảng ngày tự chọn + mã tuyến/mã chuyến,
+ *  thêm 03/09/2026 — TlldTuyen.tsx). Nhẹ hơn TlldChuyen (không có routeText — bộ lọc chỉ TRA CỨU,
+ *  không ghép với lịch toàn vùng để dựng lộ trình). KHÔNG dùng chung cache/index toàn cụm (rowsCache/
+ *  tlldCache ở trên) vì khoảng ngày do Sếp tự chọn, có thể khác 30/45s TTL và khác hẳn "hôm nay" —
+ *  gọi thẳng /api/tlld-live?tu=&den= mỗi lần tra cứu (đúng tinh thần "chỉ dùng để tra cứu", KHÔNG
+ *  đụng vào cache/chỉ số cuốn-chiếu của các khung Sức khoẻ/KPI/2-cột cảnh báo). */
+export interface TlldRangeRow {
+  ngay: string;
+  maChuyen: string;
+  maTuyen: string;
+  loaiTai: string;
+  hub: string;
+  bienSo: string;
+  partner: string;
+  truckCap: string;
+  kg: string;
+  soDon: string;
+  tlldWeight: number | null;
+  tlldVol: number | null;
+}
+
+/** Tra cứu CHUYẾN theo khoảng ngày [tu, den) tự chọn (bỏ trống = không giới hạn đầu/cuối) — dùng cho
+ *  bộ lọc "Tra cứu" mới ở đầu trang TLLD Tuyến. Lọc thêm theo mã tuyến/mã chuyến làm ở phía gọi
+ *  (TlldTuyen.tsx), vì đây chỉ là 1 lần gọi API thô, không gộp/tính lại như buildTlldIndex(). */
+export async function fetchTlldRange(tu?: string, den?: string, signal?: AbortSignal): Promise<TlldRangeRow[]> {
+  const qs = new URLSearchParams();
+  if (tu) qs.set("tu", tu);
+  if (den) qs.set("den", den);
+  const url = "/api/tlld-live" + (qs.toString() ? "?" + qs.toString() : "");
+  const res = await fetchWithTimeout(url, { cache: "no-store", signal }, 30000);
+  if (!res.ok) throw new Error("tlld_live_" + res.status);
+  const d = await res.json();
+  if (!d?.ok) throw new Error(d?.detail || d?.error || "tlld_live_loi");
+  const rows = (d.rows || []) as DongChuyenApi[];
+  return rows.map((r) => ({
+    ngay: r.ngay,
+    maChuyen: r.ma_chuyen,
+    maTuyen: r.ma_tuyen || "",
+    loaiTai: r.loai_tai || "",
+    hub: r.hub || "",
+    bienSo: r.bien_so || "",
+    partner: r.partner_type || "",
+    truckCap: r.tai_trong_xe != null ? String(r.tai_trong_xe) : "",
+    kg: r.khoiluong_kg != null ? String(r.khoiluong_kg) : "",
+    soDon: r.so_don_hang != null ? String(r.so_don_hang) : "",
+    tlldWeight: r.tlld_weight_chuyen ?? null,
+    tlldVol: r.tlld_vol_chuyen ?? null,
+  }));
 }
 
 // CACHE DÒNG THÔ (chưa gộp): tách riêng khỏi cache chỉ mục đã gộp bên dưới để LỌC THEO VÙNG
