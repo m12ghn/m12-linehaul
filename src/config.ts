@@ -51,17 +51,15 @@ export const REFRESH_MS = 60 * 1000;
 export const GEO_REFRESH_MS = 5 * 60 * 1000;
 
 /**
- * Nguồn dữ liệu TLLD (tỷ lệ lấp đầy) — workbook riêng.
- * 4 tab hub cùng cấu trúc (cột 0=ngày, 3=mã tuyến, 10=tlld_weight),
- * gộp lại để tra theo mã tuyến.
+ * Workbook TLLD gốc (tỷ lệ lấp đầy) — Sheet cũ.
+ * ⚠ 01/09/2026: src/lib/tlld.ts (TLLD theo mã TUYẾN, dùng ở Tổng Quan/TLLD Tuyến)
+ * ĐÃ CHUYỂN sang đọc api/tlld-live (nguồn Supabase/Data API) — không còn đọc
+ * TLLD_TABS/tlldCsvSources nữa. Hằng số + hàm dưới đây CHỈ còn phục vụ
+ * src/lib/tcTlld.ts (TLLD tuyến TC theo ngày event, pivot riêng — CHƯA chuyển),
+ * dùng chung workbook nhưng qua TC_TLLD_GID (một tab pivot khác, không phải
+ * 4 tab hub trong TLLD_TABS). Đừng xoá khi thấy TLLD_TABS hết chỗ dùng.
  */
 export const TLLD_SHEET_ID = "1VfkJ6HOzCbidoCGqNTnU2Qs2nNMxwkKJw2_gKTSSchM";
-export const TLLD_TABS: { gid: string; hub: string }[] = [
-  { gid: "1276580053", hub: "HCM01" },
-  { gid: "1306265684", hub: "HCM20" },
-  { gid: "294568716", hub: "Sóng Thần" },
-  { gid: "1240709030", hub: "Tân Tạo" },
-];
 
 /**
  * Nguồn CSV cho workbook TLLD. ƯU TIÊN gviz (đọc trực tiếp model sheet -> cập
@@ -199,8 +197,13 @@ export const SHEETS: SheetDef[] = [
   { key: "noi-vung-hcm", gid: "961518640", label: "Nội Vùng HCM", hidden: true },
   { key: "lien-vung-mn", gid: "84848529", label: "Liên Vùng MN" },
   { key: "mbh-song-than", gid: "541305122", label: "MBH Sóng Thần" },
-  { key: "mbh-tan-tao", gid: "1937583700", label: "MBH Tân Tạo" },
-  { key: "mbh-tan-thuan-q7", gid: "722712650", label: "MBH Tân Thuận Q7" },
+  // 01/09/2026: gộp 2 tab cũ "MBH Tân Tạo" (gid 1937583700) + "MBH Tân Thuận
+  // Q7" (gid 722712650) thành 1 tab duy nhất "Mobile Hub" — Sếp xác nhận cấu
+  // trúc sheet Lịch Tải thật đã đổi, không còn tách riêng nữa. Chưa có gid
+  // thật (sheet không public, vẫn nạp qua CSV tải tay — xem
+  // scripts/import-sheets.mjs) nên để trống; xem migration 0006 và mục "TLLD
+  // Tuyến"/trạng thái migration để biết chi tiết đợt gộp này.
+  { key: "mobile-hub", gid: "", label: "Mobile Hub" },
 ];
 
 /** Các vùng HIỂN THỊ trên UI (bỏ vùng `hidden`). Dùng ở MỌI bộ chọn vùng (SheetTabs, dropdown

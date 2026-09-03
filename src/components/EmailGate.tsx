@@ -32,7 +32,15 @@ export function EmailGate({ onEmailLogin }: { onEmailLogin: (email: string) => P
   return (
     <div className="emailgate">
       <div className="eg-card">
-        <img src="/logo-ghn.jpg" className="eg-logo" alt="Giao Hàng Nhanh" />
+        {/* Màn đăng nhập chạy trước khi biết người dùng là ai, nhưng chế độ
+            sáng/tối đã được gắn từ main.tsx nên đổi logo theo đúng quy tắc brand. */}
+        <img
+          src={document.documentElement.classList.contains("ghn-dark")
+            ? "/ghn-logo-white.png"
+            : "/ghn-logo-on-light.png"}
+          className="eg-logo"
+          alt="Giao Hàng Nặng"
+        />
         <div className="eg-title">Dashboard M12</div>
         <div className="eg-subtitle">Đăng nhập bằng email nội bộ GHN</div>
 

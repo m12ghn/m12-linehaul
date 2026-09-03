@@ -4,17 +4,17 @@ import { RouteList } from "../components/RouteList";
 import { SuggestDrop } from "../components/SuggestDrop";
 import { MapPanel } from "../components/MapPanel";
 import { StatusBar } from "../components/StatusBar";
+import { RegionToolbar } from "../components/RouteEditor";
 import { normSearch } from "../lib/normalize";
 import { exportLichTai } from "../lib/exportExcel";
 import { useFleet } from "../lib/useFleet";
 import { usePlaceIds } from "../lib/allRoutes";
 import { useTlld } from "../lib/useTlld";
 import { normCode } from "../lib/tlld";
-import { loadSheet } from "../lib/sheet";
+import { loadRegion, type DbRoute, type DbSheetData } from "../lib/db/lichTaiApi"; // 01/09/2026: Lịch Tải đã chuyển sang Supabase
 import { VISIBLE_SHEETS } from "../config";
-import type { Route, SheetData } from "../types";
 
-function KpiRow({ routes, regionLabel, category }: { routes: Route[]; regionLabel: string; category: string }) {
+function KpiRow({ routes, regionLabel, category }: { routes: DbRoute[]; regionLabel: string; category: string }) {
   const stops = routes.reduce((a, r) => a + r.stops.length, 0);
   const mapped = routes.reduce((a, r) => a + r.mappedCount, 0);
   const mappedPct = stops ? Math.round((mapped / stops) * 100) : 0;
@@ -42,6 +42,7 @@ function KpiRow({ routes, regionLabel, category }: { routes: Route[]; regionLabe
 export function LichTai({
   data,
   regionLabel,
+  regionKey,
   refreshing,
   onRefresh,
   category,
@@ -54,11 +55,15 @@ export function LichTai({
   setMapMode,
   gid,
   canEdit,
+  canExport,
+  canEditRoute,
   onSaved,
   onSwitchRegion,
 }: {
-  data: SheetData;
+  data: DbSheetData;
   regionLabel: string;
+  /** Khoá vùng dùng cho Supabase (VISIBLE_SHEETS[].key) — cần cho "+ Tuyến mới"/"Xuất ra Google Sheet". */
+  regionKey: string;
   refreshing: boolean;
   onRefresh: () => void;
   category: string;
@@ -70,7 +75,13 @@ export function LichTai({
   mapMode: "auto" | "mymap";
   setMapMode: (m: "auto" | "mymap") => void;
   gid?: string;
+  /** Quyền RBAC "lich-tai/edit" — dùng CHO "+ Tuyến mới" (RegionToolbar), KHÔNG dùng cho nút ✎
+   *  trên từng thẻ tuyến nữa (xem canEditRoute, 03/09). */
   canEdit?: boolean;
+  canExport?: boolean;
+  /** Chỉ true khi vai trò = admin — gate nút "✎ Sửa" trên RouteCard (03/09, Sếp yêu cầu tách
+   *  riêng khỏi quyền RBAC "edit" vốn cấp cho nhiều vai trò hơn). */
+  canEditRoute?: boolean;
   onSaved?: () => void;
   /** Chuyển sang vùng khác (theo gid) — dùng khi tìm không thấy ở vùng hiện tại nhưng có ở vùng khác. */
   onSwitchRegion?: (gid: string) => void;
@@ -88,12 +99,9 @@ export function LichTai({
     () => (category ? data.routes.filter((r) => r.category === category) : data.routes),
     [data.routes, category]
   );
-  // Gợi ý NCC cho ô sửa "NCC" tại chỗ (chỉ dùng khi canEdit — xem RouteCard/EditableCell).
-  const nccOptions = useMemo(() => {
-    const s = new Set<string>();
-    for (const r of data.routes) if (r.ncc) s.add(r.ncc);
-    return [...s].sort((a, b) => a.localeCompare(b, "vi"));
-  }, [data.routes]);
+  // Mã tuyến đang có trong CẢ VÙNG (không chỉ loại tuyến đang chọn) — cho khung xem trước của
+  // "Tải lên hàng loạt" biết tuyến nào sẽ TẠO MỚI / tuyến nào sẽ SỬA trước khi Sếp xác nhận.
+  const existingCodes = useMemo(() => new Set(data.routes.map((r) => r.route)), [data.routes]);
   const q = normSearch(search);
   const qBks = search.toLowerCase().replace(/[^a-z0-9]/g, ""); // biển số: bỏ dấu "-"/khoảng trắng để khớp "50H26441" ~ "50H-26441" ~ "26441"
   // ID bưu cục (cột "ID" trong Sheet) — CHỈ coi là tìm theo ID khi cả câu tìm (bỏ khoảng trắng/dấu
@@ -119,7 +127,7 @@ export function LichTai({
 
   // Tìm KHÔNG thấy ở vùng đang xem -> thử tra CÁC VÙNG KHÁC (Sếp báo 2026-08-24: tuyến có thật
   // trên Sheet nhưng "0 tuyến" vì đang đứng nhầm vùng — dò gõ mã tuyến không biết tuyến đó thuộc
-  // vùng nào). loadSheet() có cache TTL riêng nên không tốn thêm request nếu vùng đó đã được tải.
+  // vùng nào). loadRegion() có cache TTL riêng nên không tốn thêm request nếu vùng đó đã được tải.
   const [crossHit, setCrossHit] = useState<{ label: string; gid: string } | null>(null);
   useEffect(() => {
     if (!q || filtered.length > 0) { setCrossHit(null); return; }
@@ -128,7 +136,7 @@ export function LichTai({
       for (const s of VISIBLE_SHEETS) {
         if (s.gid === gid) continue; // vùng đang xem -> đã biết là 0 kết quả rồi
         try {
-          const res = await loadSheet(s.gid);
+          const res = await loadRegion(s.key);
           const hit = res.routes.some((r) =>
             normSearch(r.route).includes(q) ||
             r.stops.some((st) => normSearch(st.kho).includes(q)) ||
@@ -235,6 +243,18 @@ export function LichTai({
         </button>
       </div>
 
+      {(canEdit || canExport) && (
+        <RegionToolbar
+          regionKey={regionKey}
+          regionLabel={regionLabel}
+          canEdit={!!canEdit}
+          canExport={!!canExport}
+          canBulkUpload={!!canEditRoute}
+          existingCodes={existingCodes}
+          onChanged={onRefresh}
+        />
+      )}
+
       {q && filtered.length === 0 && crossHit && (
         <div className="pl-warn" style={{ background: "var(--blue-soft)", color: "var(--blue)", marginBottom: 10 }}>
           🤖 Không có ở <b>{regionLabel}</b>, nhưng có ở <b>{crossHit.label}</b> —{" "}
@@ -282,10 +302,8 @@ export function LichTai({
             onSelect={(id) => setSelected(id === selected ? null : id)}
             onRetry={onRefresh}
             fleet={fleet}
-            gid={gid}
-            canEdit={canEdit}
+            canEditRoute={canEditRoute}
             onSaved={onSaved}
-            nccOptions={nccOptions}
           />
           {filtered.length > visible ? (
             <div className="list-frame-note">⌄ Lăn xuống để xem thêm {filtered.length - visible} tuyến…</div>

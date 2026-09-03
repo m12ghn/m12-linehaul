@@ -5,7 +5,7 @@ import { fetchRoadGeometry } from "../lib/route-distance";
 import { lookupCoord } from "../lib/geo";
 import type { Route } from "../types";
 
-const PALETTE = ["#f15a24", "#1668c7", "#1faa59", "#9b2fae", "#e2a300", "#0e7c86", "#d6336c"];
+const PALETTE = ["var(--chart-1)", "var(--chart-2)", "var(--color-success)", "var(--chart-4)", "var(--color-warning)", "var(--chart-6)", "var(--chart-4)"];
 
 function numIcon(text: string, kind: "start" | "end" | "mid", offset?: [number, number]) {
   // offset = lệch HIỂN THỊ (pixel màn hình), dùng để tách các marker ở SÁT NHAU ra khỏi việc chồng
@@ -144,7 +144,7 @@ export function MapPanel({
     routes.forEach((r, ri) => {
       const coords = r.stops.filter((s) => s.coord).map((s) => s.coord!) as [number, number][];
       if (coords.length === 0) return;
-      const color = single ? "#f15a24" : PALETTE[ri % PALETTE.length];
+      const color = single ? "var(--chart-1)" : PALETTE[ri % PALETTE.length];
 
       if (single) singleTotal = coords.length;
 
@@ -303,7 +303,7 @@ export function MapPanel({
             <div className="map-empty overlay">
               <div>
                 <div className="ic">🗺️</div>
-                <div style={{ fontWeight: 700, color: "#1f2d3d", marginBottom: 6 }}>
+                <div style={{ fontWeight: 700, color: "var(--text-strong)", marginBottom: 6 }}>
                   Chọn một tuyến để xem lộ trình
                 </div>
                 <div>Bấm vào thẻ tuyến bên trái — bản đồ sẽ vẽ thứ tự các điểm dừng.</div>

@@ -100,7 +100,7 @@ export function NccPerformance({ lay, giao, date }: { lay: TCRoute[]; giao: TCRo
           </thead>
           <tbody>
             {ghn && (
-              <tr style={{ background: "rgba(22,104,199,0.06)" }}>
+              <tr style={{ background: "rgba(0,161,154,0.06)" }}>
                 <td style={{ fontWeight: 700 }}>🏠 GHN (xe nhà)</td>
                 <td className="num">{ghn.book}</td>
                 <td className="num" style={{ color: "var(--muted)" }}>—</td>
@@ -135,7 +135,7 @@ export function NccPerformance({ lay, giao, date }: { lay: TCRoute[]; giao: TCRo
       </div>
 
       {/* NHẬN ĐỊNH TỰ ĐỘNG (việc cần làm) */}
-      <div style={{ fontSize: 14, lineHeight: 1.65, color: "#3a4753", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px", marginTop: 10 }}>
+      <div style={{ fontSize: 14, lineHeight: 1.65, color: "var(--text-body)", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px", marginTop: 10 }}>
         <b>🤖 Nhận định:</b> NCC thuê ngoài đáp ứng <b>{rateNcc}%</b> ({nccOk}/{nccBook} xe có biển số).{" "}
         Xe nhà GHN gánh <b>{ghnShare}%</b> tổng tải, còn lại <b>{100 - ghnShare}%</b> thuê NCC ngoài.{" "}
         {weak.length > 0

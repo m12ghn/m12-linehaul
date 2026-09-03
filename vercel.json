@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [{ "key": "cache-control", "value": "no-store" }]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/export-sheets",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/tlld",
+      "schedule": "0 1 * * *"
+    }
+  ]
+}

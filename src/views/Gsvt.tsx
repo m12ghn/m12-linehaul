@@ -18,7 +18,9 @@ import { Collapsible } from "../components/Collapsible";
 const tel = (s: string) => (s || "").replace(/[^\d]/g, "");
 type Tab = "all" | ShiftKey;
 
-const SHIFT_TONE: Record<ShiftKey, string> = { Ca1: "#f59e0b", Ca2: "#3b82f6", Ca3: "#8b5cf6" };
+// 3 ca trực là PHÂN LOẠI, không phải trạng thái -> lấy màu từ dải chart,
+// không mượn màu cảnh báo/lỗi (brand cấm dùng status color để trang trí).
+const SHIFT_TONE: Record<ShiftKey, string> = { Ca1: "var(--chart-1)", Ca2: "var(--chart-6)", Ca3: "var(--chart-3)" };
 const PAGE = 8;
 
 export function Gsvt() {

@@ -175,7 +175,7 @@ function FcCompareChart({ days, series, unit }: {
   const yOf = (v: number) => padT + ch - (v / yMax) * ch;
   return (
     <svg className="sl-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: 210 }}>
-      {[0, 0.5, 1].map((f, i) => <line key={i} x1={padL} y1={yOf(f * yMax)} x2={W - padR} y2={yOf(f * yMax)} stroke="#eef1f5" />)}
+      {[0, 0.5, 1].map((f, i) => <line key={i} x1={padL} y1={yOf(f * yMax)} x2={W - padR} y2={yOf(f * yMax)} stroke="var(--surface-sunken)" />)}
       {days.map((d, i) => {
         const gx = padL + i * slot + (slot - groupW) / 2;
         const a = series[0]?.vals[i], b = series[1]?.vals[i];
@@ -193,13 +193,13 @@ function FcCompareChart({ days, series, unit }: {
                 </g>
               );
             })}
-            {pc != null && <text x={gx + groupW / 2} y={13} textAnchor="middle" className="fc-pct" style={{ fill: pc >= 0 ? "#1faa59" : "#e23b3b" }}>{pc >= 0 ? "+" : ""}{pc}%</text>}
-            <text x={gx + groupW / 2} y={H - padB + 12} textAnchor="middle" className="fc-xlb-a" style={{ fontSize: 10.5, fontWeight: 700, fill: series[0]?.color || "#44515f" }}>{d.label}</text>
-            {d.sub && <text x={gx + groupW / 2} y={H - padB + 23} textAnchor="middle" className="fc-xlb-b" style={{ fontSize: 9.5, fontWeight: 600, fill: series[1]?.color || "#8a97a4" }}>{d.sub}</text>}
+            {pc != null && <text x={gx + groupW / 2} y={13} textAnchor="middle" className="fc-pct" style={{ fill: pc >= 0 ? "var(--color-success)" : "var(--color-danger)" }}>{pc >= 0 ? "+" : ""}{pc}%</text>}
+            <text x={gx + groupW / 2} y={H - padB + 12} textAnchor="middle" className="fc-xlb-a" style={{ fontSize: 10.5, fontWeight: 700, fill: series[0]?.color || "var(--text-muted)" }}>{d.label}</text>
+            {d.sub && <text x={gx + groupW / 2} y={H - padB + 23} textAnchor="middle" className="fc-xlb-b" style={{ fontSize: 9.5, fontWeight: 600, fill: series[1]?.color || "var(--text-faint)" }}>{d.sub}</text>}
           </g>
         );
       })}
-      <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="#cdd6e0" />
+      <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="var(--chart-axis)" />
     </svg>
   );
 }
@@ -1262,17 +1262,17 @@ export function PlanEvent({ view, onRequestKeHoach }: { view: "ke-hoach" | "chi-
                         <>
                           <div className="pe-fc-sub">📊 Sản lượng (đơn) · Thực tế vs Dự báo</div>
                           <FcCompareChart unit="đơn" days={k.withAct.map((d) => ({ label: dmStr(d.date) }))} series={[
-                            { name: "Thực tế", color: "#1faa59", vals: k.withAct.map((d) => d.actVol) },
-                            { name: "Dự báo", color: "#f15a24", vals: k.withAct.map((d) => d.fcVol) },
+                            { name: "Thực tế", color: "var(--color-success)", vals: k.withAct.map((d) => d.actVol) },
+                            { name: "Dự báo", color: "var(--chart-1)", vals: k.withAct.map((d) => d.fcVol) },
                           ]} />
                           <div className="pe-comment" dangerouslySetInnerHTML={{ __html: compareComment("Thực tế", k.withAct.map((d) => d.actVol), "dự báo", k.withAct.map((d) => d.fcVol), "đơn", k.withAct.map((d) => dmStr(d.date))) }} />
                           <div className="pe-fc-sub">⚖️ Khối lượng (kg) · Thực tế vs Dự báo</div>
                           <FcCompareChart unit="kg" days={k.withAct.map((d) => ({ label: dmStr(d.date) }))} series={[
-                            { name: "Thực tế", color: "#1faa59", vals: k.withAct.map((d) => d.actW) },
-                            { name: "Dự báo", color: "#f15a24", vals: k.withAct.map((d) => d.fcW) },
+                            { name: "Thực tế", color: "var(--color-success)", vals: k.withAct.map((d) => d.actW) },
+                            { name: "Dự báo", color: "var(--chart-1)", vals: k.withAct.map((d) => d.fcW) },
                           ]} />
                           <div className="pe-comment" dangerouslySetInnerHTML={{ __html: compareComment("Thực tế", k.withAct.map((d) => d.actW), "dự báo", k.withAct.map((d) => d.fcW), "kg", k.withAct.map((d) => dmStr(d.date))) }} />
-                          <FcLegend series={[{ name: "Thực tế", color: "#1faa59" }, { name: "Dự báo", color: "#f15a24" }]} />
+                          <FcLegend series={[{ name: "Thực tế", color: "var(--color-success)" }, { name: "Dự báo", color: "var(--chart-1)" }]} />
                         </>
                       )}
                     </Reveal>
@@ -1338,20 +1338,20 @@ export function PlanEvent({ view, onRequestKeHoach }: { view: "ke-hoach" | "chi-
                       {/* (1) Kỳ này (T7) vs kỳ tháng trước (T6) — theo ngày tương ứng. */}
                       <div className="pe-fc-sub">📊 {fcUnit === "don" ? "Sản lượng (đơn)" : "Khối lượng (kg)"} · Kỳ này T{evMM} vs Tháng trước T{prevMM}</div>
                       <FcCompareChart unit={unitLb} days={k.days.map((d) => ({ label: dmStr(d.date), sub: d.t6Date ? dmStr(d.t6Date) : undefined }))} series={[
-                        { name: `Kỳ này (T${evMM})`, color: "#f15a24", vals: k.days.map(valOf) },
-                        { name: `Tháng trước (T${prevMM})`, color: "#1668c7", vals: k.days.map(t6ValOf) },
+                        { name: `Kỳ này (T${evMM})`, color: "var(--chart-1)", vals: k.days.map(valOf) },
+                        { name: `Tháng trước (T${prevMM})`, color: "var(--chart-2)", vals: k.days.map(t6ValOf) },
                       ]} />
                       <div className="pe-comment" dangerouslySetInnerHTML={{ __html: compareComment("Kỳ này", k.days.map(valOf), `tháng trước`, k.days.map(t6ValOf), unitLb, k.days.map((d) => dmStr(d.date))) }} />
-                      <FcLegend series={[{ name: `Kỳ này (T${evMM})`, color: "#f15a24" }, { name: `Tháng trước (T${prevMM})`, color: "#1668c7" }]} />
+                      <FcLegend series={[{ name: `Kỳ này (T${evMM})`, color: "var(--chart-1)" }, { name: `Tháng trước (T${prevMM})`, color: "var(--chart-2)" }]} />
 
                       {/* (2) Ngày event vs NGÀY THƯỜNG cùng thứ tuần trước (-7 ngày) */}
                       <div className="pe-fc-sub" style={{ marginTop: 10 }}>📅 Ngày event vs Ngày thường (cùng thứ, tuần trước) · {fcUnit === "don" ? "Sản lượng" : "Khối lượng"}</div>
                       <FcCompareChart unit={unitLb} days={k.days.map((d) => ({ label: dmStr(d.date), sub: d.normDate ? dmStr(d.normDate) : undefined }))} series={[
-                        { name: "Ngày event", color: "#f15a24", vals: k.days.map(valOf) },
-                        { name: "Ngày thường", color: "#8a97a4", vals: k.days.map(normValOf) },
+                        { name: "Ngày event", color: "var(--chart-1)", vals: k.days.map(valOf) },
+                        { name: "Ngày thường", color: "var(--text-faint)", vals: k.days.map(normValOf) },
                       ]} />
                       <div className="pe-comment" dangerouslySetInnerHTML={{ __html: compareComment("Ngày event", k.days.map(valOf), "ngày thường", k.days.map(normValOf), unitLb, k.days.map((d) => dmStr(d.date))) }} />
-                      <FcLegend series={[{ name: "Ngày event", color: "#f15a24" }, { name: "Ngày thường (cùng thứ, tuần trước)", color: "#8a97a4" }]} />
+                      <FcLegend series={[{ name: "Ngày event", color: "var(--chart-1)" }, { name: "Ngày thường (cùng thứ, tuần trước)", color: "var(--text-faint)" }]} />
 
                       <div className="pe-comment" style={{ borderLeftColor: "var(--blue)" }}><b>📋 Tổng quát kho:</b> <span dangerouslySetInnerHTML={{ __html: fcComment(k) }} /></div>
                     </>

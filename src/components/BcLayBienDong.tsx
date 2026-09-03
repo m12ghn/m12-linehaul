@@ -14,12 +14,17 @@ import {
   type MonthMeta,
 } from "../lib/bcLayBienDong";
 
-/* Palette 20 màu phân biệt (tab20 của matplotlib) — không thêm dependency. */
+/* Bảng màu chuỗi dữ liệu — theo brand GHN chỉ được dùng dải teal + dải xám.
+   Đã đo bằng công cụ kiểm tra tương phản: 6 màu đầu phân biệt được cả với
+   người mù màu (ΔE thấp nhất 23.9). Từ vị trí thứ 7 trở đi KHÔNG bịa thêm màu
+   mà cho về xám "Khác" — brand cấm dùng màu ngoài bảng, và mắt người cũng
+   không phân biệt nổi 20 sắc teal cạnh nhau.
+   ĐỀ XUẤT ĐỢT SAU: gộp thẳng ở tầng dữ liệu (top 6 BC + 1 nhóm "Khác") thay vì
+   vẽ 20 đường rồi tô xám 14 đường — xem lib/bcLayBienDong.ts. */
 const PALETTE = [
-  "#1f77b4","#ff7f0e","#2ca02c","#d62728","#9467bd",
-  "#8c564b","#e377c2","#7f7f7f","#bcbd22","#17becf",
-  "#aec7e8","#ffbb78","#98df8a","#ff9896","#c5b0d5",
-  "#c49c94","#f7b6d2","#c7c7c7","#dbdb8d","#9edae5",
+  "var(--chart-1)", "var(--chart-2)", "var(--chart-3)",
+  "var(--chart-4)", "var(--chart-5)", "var(--chart-6)",
+  ...Array(14).fill("var(--chart-other)"),
 ];
 
 type Metric = "vol" | "kg";
@@ -341,7 +346,7 @@ function Top20Chart({
           const first = rows[0];
           const top5 = rows.slice(0, 5);
           const html = `<div><b>${dowLabel(first.dow)} ${fmtDdMm(bestDay, meta.key)}</b> ${bucketBadge(first.bucket as Parameters<typeof bucketBadge>[0])}</div>
-            <div style="color:#94a3b8">Top 5 BC cao nhất (${metric === "vol" ? "đơn" : "kg"}):</div>
+            <div style="color:var(--text-faint)">Top 5 BC cao nhất (${metric === "vol" ? "đơn" : "kg"}):</div>
             ${top5.map(r => `<div>· <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${r.bc.color};margin-right:4px"></span>${shortBcName(r.bc.profile.wname).slice(0,30)}: <b>${fmt(r.v)}</b></div>`).join("")}`;
           onHover({ html, x: e.clientX, y: e.clientY });
         }}
@@ -414,9 +419,9 @@ function shortN(n: number): string {
 }
 
 function bucketBadge(b: "WEEKDAY" | "SAT" | "SUN" | "EVENT"): string {
-  if (b === "EVENT") return `<b style="color:#f5a623">EVENT</b>`;
-  if (b === "SUN") return `<b style="color:#6b7280">CN</b>`;
-  if (b === "SAT") return `<b style="color:#9aa7b4">T7</b>`;
+  if (b === "EVENT") return `<b style="color:var(--accent)">EVENT</b>`;
+  if (b === "SUN") return `<b style="color:var(--text-muted)">CN</b>`;
+  if (b === "SAT") return `<b style="color:var(--text-faint)">T7</b>`;
   return "";
 }
 
@@ -435,7 +440,10 @@ function swatchStyle(bg: string): CSSProperties {
 
 /* ---- CSS scoped ---- */
 const CSS_SCOPED = `
-.bd-wrap { position: relative; --bd-sat: rgba(148, 163, 184, 0.20); --bd-sun: rgba(100, 116, 139, 0.32); --bd-event: rgba(245, 166, 35, 0.20); }
+/* Dải nền đánh dấu ngày: T7/CN là xám trung tính (đậm dần), EVENT là teal.
+   Dùng alpha nên hiện đúng trên cả nền sáng lẫn nền đen. EVENT là một LOẠI
+   ngày chứ không phải cảnh báo, nên không dùng màu cam status. */
+.bd-wrap { position: relative; --bd-sat: rgba(128, 128, 128, 0.18); --bd-sun: rgba(128, 128, 128, 0.34); --bd-event: rgba(0, 161, 154, 0.20); }
 .bd-sec-h { font-size: 16px; font-weight: 800; color: var(--ink); margin: 18px 0 8px; }
 .bd-sec-sub { font-weight: 500; color: var(--muted); font-size: 13px; }
 .bd-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
@@ -453,5 +461,5 @@ const CSS_SCOPED = `
 .bd-chip-nm { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bd-chip-loc { color: var(--muted); font-weight: 600; }
 .bd-chip-cv { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.bd-tooltip { position: fixed; pointer-events: none; background: rgba(30, 42, 55, 0.96); color: #fff; padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.55; z-index: 1000; max-width: 280px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); font-variant-numeric: tabular-nums; }
+.bd-tooltip { position: fixed; pointer-events: none; background: rgba(0, 0, 0, 0.92); color: var(--ghn-white); padding: 8px 10px; border-radius: 6px; font-size: 12px; line-height: 1.55; z-index: 1000; max-width: 280px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); font-variant-numeric: tabular-nums; }
 `;

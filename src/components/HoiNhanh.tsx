@@ -281,7 +281,7 @@ export function HoiNhanh() {
         .hn-body{padding:0 16px 14px}
         .hn-msgs{display:flex;flex-direction:column;gap:8px;max-height:340px;overflow-y:auto;padding:6px 2px}
         .hn-chips{display:flex;flex-wrap:wrap;gap:7px}
-        .hn-chip{border:1px solid var(--line-2);background:var(--bg);color:#48586a;border-radius:999px;padding:5px 12px;font-size:12.5px;cursor:pointer;transition:.14s}
+        .hn-chip{border:1px solid var(--line-2);background:var(--bg);color:var(--text-muted);border-radius:999px;padding:5px 12px;font-size:12.5px;cursor:pointer;transition:.14s}
         .hn-chip:hover{border-color:var(--blue);color:var(--blue);background:var(--white)}
         @media(max-width:640px){.hn-sub{display:none}}
       `}</style>

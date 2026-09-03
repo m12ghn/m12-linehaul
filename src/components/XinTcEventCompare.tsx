@@ -64,7 +64,7 @@ export function XinTcEventCompare({ recs, monthSel }: { recs: XtcRec[]; monthSel
         ))}
       </div>
 
-      <div style={{ fontSize: 14, lineHeight: 1.6, color: "#3a4753", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px", marginTop: 10 }}
+      <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--text-body)", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px", marginTop: 10 }}
         dangerouslySetInnerHTML={{ __html: "<b>🤖 Nhận xét:</b> " + insight }} />
     </div>
   );

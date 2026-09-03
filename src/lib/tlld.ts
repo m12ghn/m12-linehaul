@@ -1,12 +1,18 @@
 /* ============================================================
-   Đọc dữ liệu TLLD (tỷ lệ lấp đầy theo khối lượng) từ 4 tab hub,
+   Đọc dữ liệu TLLD (tỷ lệ lấp đầy theo khối lượng) từ Supabase
+   (api/tlld-live -> view m12.tlld_trip, một dòng mỗi CHUYẾN, xem 0005),
    gộp theo MÃ TUYẾN -> tính:
    - n1   : tỷ lệ lấp đầy ngày gần nhất (N-1)
    - avg7 : trung bình 7 ngày gần nhất
    - series: 7 điểm theo ngày (để vẽ sparkline)
+
+   TRƯỚC 01/09/2026: đọc thẳng 4 tab CSV của workbook TLLD trên Google Sheet
+   (mỗi tab 1 hub, ~17MB, phải tự đoán cột qua findCol()). Giờ nguồn thật là
+   Data API (Trino) -> cron nạp vào Supabase -> đọc qua 1 endpoint JSON duy
+   nhất, có tên cột rõ ràng, không cần đoán/parse CSV nữa. Toàn bộ phép tính
+   BÊN DƯỚI (avg7, cuốn chiếu, tuần lịch...) giữ NGUYÊN không đổi — chỉ đổi
+   phần nạp dữ liệu đầu vào.
    ============================================================ */
-import { parseCSV, findCol } from "./csv";
-import { TLLD_TABS, tlldCsvSources } from "../config";
 import { fetchWithTimeout } from "./fetchTimeout";
 
 /** ISO yyyy-mm-dd rơi vào T7 (6) hoặc CN (0)? */
@@ -21,27 +27,6 @@ export function normCode(s: string): string {
   return (s || "").trim().toUpperCase().replace(/\s+/g, "");
 }
 
-/** "57%" | "0.6966" | "1.0069" -> phân số (0..>1). null nếu trống/không hợp lệ. */
-function parseFill(s: string): number | null {
-  const t = (s || "").trim();
-  if (!t) return null;
-  if (t.endsWith("%")) {
-    const v = parseFloat(t.slice(0, -1).replace(",", "."));
-    return isNaN(v) ? null : v / 100;
-  }
-  const v = parseFloat(t.replace(",", "."));
-  return isNaN(v) ? null : v;
-}
-
-/** "2026-06-23" | "6/15/2026" -> "YYYY-MM-DD". null nếu không nhận dạng được. */
-function parseDate(s: string): string | null {
-  const t = (s || "").trim();
-  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-  m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (m) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
-  return null;
-}
 
 export interface TlldRoute {
   n1: number | null; // lấp đầy ngày gần nhất
@@ -52,6 +37,16 @@ export interface TlldRoute {
   days30: number; // số ngày góp vào avg30
   weekendAvg: number | null; // TB lấp đầy các ngày T7/CN (trong 30 ngày)
   weekendDays: number; // số ngày cuối tuần có dữ liệu
+  // TLLD THEO VOLUME (số đơn) — SONG SONG bộ chỉ số khối lượng ở trên, thêm 01/09 khi rebuild
+  // TLLD Tuyến (Sếp yêu cầu 2 góc nhìn khối lượng/Volume). Nhẹ hơn bộ khối lượng (không có
+  // rollCur/rollPrev/calCur/calPrev/eventAvg — chưa có nơi nào cần so kỳ chi tiết theo Volume).
+  tlldVol: {
+    n1: number | null; avg7: number | null; avg14: number | null; avg30: number | null;
+    weekendAvg: number | null;
+    series: { date: string; val: number | null }[];
+    series30: { date: string; val: number | null }[];
+    lastVal: number | null; lastDate: string | null;
+  };
   rollCur: (number | null)[]; // Phần 1 CUỐN CHIẾU — kỳ hiện tại [N-1, 7d, 14d, 20d] (kết thúc N-1)
   rollPrev: (number | null)[]; // Phần 1 — kỳ LIỀN TRƯỚC (back-to-back)
   calCur: (number | null)[]; // Phần 2 TUẦN LỊCH — hiện tại [N-1, tuần này, 2 tuần, 3 tuần] (T2→N-1)
@@ -78,7 +73,8 @@ export interface EventWindow {
   range: string; // vd "06/06–11/06"
   dates: string[]; // 6 ngày YYYY-MM-DD
 }
-function addDaysISO(iso: string, n: number): string {
+/** Export cho TlldTuyen.tsx (bộ lọc tra cứu khoảng ngày, thêm 03/09) — cộng/trừ ngày trên chuỗi ISO. */
+export function addDaysISO(iso: string, n: number): string {
   const [y, m, d] = iso.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
   dt.setUTCDate(dt.getUTCDate() + n);
@@ -115,10 +111,17 @@ export interface TlldChuyen {
   bienSo: string; // biển số
   partner: string; // GHN / NCC
   loaiTai: string; // Nhập / Xuất
-  tlldVol: number | null; // lấp đầy theo thể tích
+  tlldVol: number | null; // lấp đầy theo Volume
   tlldWeight: number | null; // lấp đầy theo khối lượng
   soDon: string; // số đơn hàng
   kg: string; // khối lượng (kg)
+}
+
+export interface TlldClusterDay {
+  weightAvg: number | null; // TB lấp đầy khối lượng TOÀN CỤM ngày này (TB đơn giản qua các tuyến có chạy)
+  volAvg: number | null; // TB lấp đầy Volume TOÀN CỤM ngày này
+  tripCount: number; // số CHUYẾN (ma_chuyen) chạy trong ngày, TOÀN CỤM
+  routeCount: number; // số TUYẾN có dữ liệu trong ngày (hợp cả tuyến chỉ có weight lẫn tuyến chỉ có volume)
 }
 
 export interface TlldIndex {
@@ -130,28 +133,107 @@ export interface TlldIndex {
   last30: string[]; // tối đa 30 ngày gần nhất có dữ liệu (tăng dần) — biểu đồ theo tuần/tháng
   allDates: string[]; // TOÀN BỘ ngày "đã chốt" có dữ liệu, không giới hạn 30 ngày (tăng dần)
   event: EventWindow | null; // đợt event ngày đôi gần nhất
+  // ngày -> {TB khối lượng, TB Volume, số chuyến, số tuyến} TOÀN CỤM — cho khung Tổng Quan
+  // (scorecard N-1 so N-2, so cùng thứ tuần trước). Chỉ tính cho ngày "đã chốt" (usable), thêm 01/09.
+  clusterDaily: Map<string, TlldClusterDay>;
   lastSync: number;
 }
 
-async function fetchTab(gid: string, signal?: AbortSignal): Promise<string | null> {
-  for (const base of tlldCsvSources(gid)) {
-    try {
-      // Timeout dài hơn mặc định (25s thay vì 12s) — tab HCM01/HCM20 ~17MB, tải chậm nhưng
-      // ĐANG CHẠY vẫn cần đủ thời gian, chỉ cắt khi thật sự treo (Google trả trang đăng nhập/lỗi).
-      const res = await fetchWithTimeout(base + "&_=" + Date.now(), { cache: "no-store", signal }, 25000);
-      if (!res.ok) continue;
-      const text = await res.text();
-      if (text.trim().length > 5) return text;
-    } catch {
-      /* thử nguồn tiếp theo */
-    }
-  }
-  return null;
+/** 1 dòng trả về từ api/tlld-live (= 1 chuyến, view m12.tlld_trip). */
+interface DongChuyenApi {
+  ngay: string;
+  ma_chuyen: string;
+  ma_tuyen: string | null;
+  loai_tai: string | null;
+  hub: string | null;
+  bien_so: string | null;
+  partner_type: string | null;
+  tai_trong_xe: number | null;
+  khoiluong_kg: number | null;
+  so_don_hang: number | null;
+  tlld_weight_chuyen: number | null;
+  tlld_vol_chuyen: number | null;
 }
 
-// CACHE + GỘP REQUEST: mỗi tab TLLD ~3MB (4 tab ≈ 13MB) -> tránh tải lại khi nhiều nơi
-// cùng cần (Overview + TLLD Tuyến…) hoặc quay lại trang trong TTL. force=true để làm mới tay.
+async function fetchTlldLive(signal?: AbortSignal): Promise<DongChuyenApi[]> {
+  // Cùng gốc (/api/...), không cần danh sách nguồn dự phòng như CSV Sheet trước đây.
+  // Timeout rộng tay (30s) — dữ liệu sẽ lớn dần khi nạp thêm lịch sử các tháng trước.
+  const res = await fetchWithTimeout("/api/tlld-live?_=" + Date.now(), { cache: "no-store", signal }, 30000);
+  if (!res.ok) throw new Error("tlld_live_" + res.status);
+  const d = await res.json();
+  if (!d?.ok) throw new Error(d?.detail || d?.error || "tlld_live_loi");
+  return (d.rows || []) as DongChuyenApi[];
+}
+
+/** 1 dòng CHUYẾN trả về cho bộ lọc "Tra cứu" TLLD Tuyến (khoảng ngày tự chọn + mã tuyến/mã chuyến,
+ *  thêm 03/09/2026 — TlldTuyen.tsx). Nhẹ hơn TlldChuyen (không có routeText — bộ lọc chỉ TRA CỨU,
+ *  không ghép với lịch toàn vùng để dựng lộ trình). KHÔNG dùng chung cache/index toàn cụm (rowsCache/
+ *  tlldCache ở trên) vì khoảng ngày do Sếp tự chọn, có thể khác 30/45s TTL và khác hẳn "hôm nay" —
+ *  gọi thẳng /api/tlld-live?tu=&den= mỗi lần tra cứu (đúng tinh thần "chỉ dùng để tra cứu", KHÔNG
+ *  đụng vào cache/chỉ số cuốn-chiếu của các khung Sức khoẻ/KPI/2-cột cảnh báo). */
+export interface TlldRangeRow {
+  ngay: string;
+  maChuyen: string;
+  maTuyen: string;
+  loaiTai: string;
+  hub: string;
+  bienSo: string;
+  partner: string;
+  truckCap: string;
+  kg: string;
+  soDon: string;
+  tlldWeight: number | null;
+  tlldVol: number | null;
+}
+
+/** Tra cứu CHUYẾN theo khoảng ngày [tu, den) tự chọn (bỏ trống = không giới hạn đầu/cuối) — dùng cho
+ *  bộ lọc "Tra cứu" mới ở đầu trang TLLD Tuyến. Lọc thêm theo mã tuyến/mã chuyến làm ở phía gọi
+ *  (TlldTuyen.tsx), vì đây chỉ là 1 lần gọi API thô, không gộp/tính lại như buildTlldIndex(). */
+export async function fetchTlldRange(tu?: string, den?: string, signal?: AbortSignal): Promise<TlldRangeRow[]> {
+  const qs = new URLSearchParams();
+  if (tu) qs.set("tu", tu);
+  if (den) qs.set("den", den);
+  const url = "/api/tlld-live" + (qs.toString() ? "?" + qs.toString() : "");
+  const res = await fetchWithTimeout(url, { cache: "no-store", signal }, 30000);
+  if (!res.ok) throw new Error("tlld_live_" + res.status);
+  const d = await res.json();
+  if (!d?.ok) throw new Error(d?.detail || d?.error || "tlld_live_loi");
+  const rows = (d.rows || []) as DongChuyenApi[];
+  return rows.map((r) => ({
+    ngay: r.ngay,
+    maChuyen: r.ma_chuyen,
+    maTuyen: r.ma_tuyen || "",
+    loaiTai: r.loai_tai || "",
+    hub: r.hub || "",
+    bienSo: r.bien_so || "",
+    partner: r.partner_type || "",
+    truckCap: r.tai_trong_xe != null ? String(r.tai_trong_xe) : "",
+    kg: r.khoiluong_kg != null ? String(r.khoiluong_kg) : "",
+    soDon: r.so_don_hang != null ? String(r.so_don_hang) : "",
+    tlldWeight: r.tlld_weight_chuyen ?? null,
+    tlldVol: r.tlld_vol_chuyen ?? null,
+  }));
+}
+
+// CACHE DÒNG THÔ (chưa gộp): tách riêng khỏi cache chỉ mục đã gộp bên dưới để LỌC THEO VÙNG
+// (loadTlldForCodes, thêm 01/09 — xem lib/useTlld.ts useTlldRegion) dùng CHUNG 1 lần tải mạng,
+// chỉ tính lại phần gộp (rẻ) thay vì gọi lại /api/tlld-live riêng cho mỗi vùng.
 const TLLD_TTL = 45000; // 45s: dưới nhịp poll 60s -> vẫn realtime, nhưng chuyển/về trang dùng lại ngay.
+let rowsCache: { at: number; data: DongChuyenApi[] } | null = null;
+let rowsInflight: Promise<DongChuyenApi[]> | null = null;
+
+async function loadTlldRows(signal?: AbortSignal, force = false): Promise<DongChuyenApi[]> {
+  if (!force) {
+    if (rowsCache && Date.now() - rowsCache.at < TLLD_TTL) return rowsCache.data;
+    if (rowsInflight) return rowsInflight; // đang tải -> dùng chung, KHÔNG tải 13MB lần 2
+  }
+  const run = fetchTlldLive(signal).then((d) => { rowsCache = { at: Date.now(), data: d }; return d; });
+  rowsInflight = run;
+  try { return await run; } finally { rowsInflight = null; }
+}
+
+// CACHE CHỈ MỤC TOÀN CỤM (đã gộp, KHÔNG lọc vùng) — dùng cho tra cứu theo mã tuyến ở khắp nơi
+// (Lịch Tải, Ghép Tải, GSVT, Overview…) + tab "Báo Cáo" (TlldClusterReport, CỐ Ý xem toàn cụm).
 let tlldCache: { at: number; data: TlldIndex } | null = null;
 let tlldInflight: Promise<TlldIndex> | null = null;
 
@@ -160,12 +242,29 @@ export async function loadTlld(signal?: AbortSignal, force = false): Promise<Tll
     if (tlldCache && Date.now() - tlldCache.at < TLLD_TTL) return tlldCache.data;
     if (tlldInflight) return tlldInflight; // đang tải -> dùng chung, KHÔNG tải 13MB lần 2
   }
-  const run = loadTlldUncached(signal).then((d) => { tlldCache = { at: Date.now(), data: d }; return d; });
+  const run = loadTlldRows(signal, force).then((rows) => {
+    const idx = buildTlldIndex(rows);
+    tlldCache = { at: Date.now(), data: idx };
+    return idx;
+  });
   tlldInflight = run;
   try { return await run; } finally { tlldInflight = null; }
 }
 
-async function loadTlldUncached(signal?: AbortSignal): Promise<TlldIndex> {
+/** Tải TLLD CHỈ CHO các mã tuyến cho trước (vd. đúng vùng/tab Lịch Tải đang chọn) — dùng cho khung
+ *  "🩺 Sức khoẻ vận hành TLLD" (TlldSucKhoe). Sếp yêu cầu 01/09: đổi tab vùng phải đổi số, không
+ *  giữ nguyên toàn cụm như bản đầu. Lọc NGAY TỪ DÒNG THÔ (1 dòng = 1 chuyến) rồi gộp lại bằng ĐÚNG
+ *  buildTlldIndex() dùng chung với bản toàn cụm -> clusterDaily/byChuyen/byCode ra ĐÚNG số riêng
+ *  của nhóm tuyến này, không suy ra/ước lượng từ số toàn cụm (đúng quy tắc "không bịa" của dự án —
+ *  xem skill m12-conventions). Dùng CHUNG cache dòng thô ở trên (cùng TTL) -> đổi vùng KHÔNG tốn
+ *  thêm request mạng, chỉ tính lại phần gộp (rẻ — mảng vài nghìn dòng). */
+export async function loadTlldForCodes(allowedCodes: Set<string>, signal?: AbortSignal, force = false): Promise<TlldIndex> {
+  const rows = await loadTlldRows(signal, force);
+  const filtered = rows.filter((r) => allowedCodes.has(normCode(r.ma_tuyen || "")));
+  return buildTlldIndex(filtered);
+}
+
+function buildTlldIndex(rows: DongChuyenApi[]): TlldIndex {
   // code -> date -> tích luỹ tlld_weight theo CHIỀU (nhập/xuất) + tổng (all).
   // Quy ước: tuyến bắt đầu từ KHO (giao) -> lấy chiều XUẤT; từ BƯU CỤC (lấy) -> chiều NHẬP.
   type DayAcc = { nhap: { s: number; c: number }; xuat: { s: number; c: number }; all: { s: number; c: number } };
@@ -186,117 +285,103 @@ async function loadTlldUncached(signal?: AbortSignal): Promise<TlldIndex> {
   const dayStat = new Map<string, { n: number; nz: number }>();
   // code -> hub -> số dòng — để suy ra hub NGUỒN chính của mỗi mã tuyến (cho báo cáo Tổng cụm theo hub).
   const hubAcc = new Map<string, Map<string, number>>();
-
-  // Xử lý (parse + gộp) TỪNG hub NGAY khi tab đó tải xong, không đợi đủ cả 4 tab mới bắt đầu
-  // parse (trước đây `Promise.all` rồi mới for-loop parse tuần tự -> hub nhỏ tải xong trước
-  // vẫn phải đợi hub HCM01 ~11MB tải xong mới được xử lý). HCM01/HCM20 ~17MB dữ liệu thật
-  // (đã kiểm tra: không phải cột thừa) nên vẫn mất vài giây tải mạng — đây là cách giảm phần
-  // xử lý CHỜ THÊM sau khi tải xong, không giảm được thời gian tải mạng của bản thân nó.
-  function processHub(hub: string, text: string): void {
-    const rows = parseCSV(text);
-    if (rows.length < 2) return;
-    const H = rows[0];
-    let dCol = findCol(H, ["ngay_xuat", "date", "ngay"]);
-    if (dCol < 0) dCol = 0;
-    let cCol = findCol(H, ["ma_tuyen", "scheduler_name", "schedule_name"]);
-    if (cCol < 0) cCol = 3;
-    let wCol = findCol(H, ["tlld_weight"]);
-    if (wCol < 0) wCol = 10;
-    let mcCol = findCol(H, ["ma_chuyen"]);
-    if (mcCol < 0) mcCol = 1;
-    let rtCol = findCol(H, ["route"]);
-    if (rtCol < 0) rtCol = 2;
-    let tcCol = findCol(H, ["truck_cap"]);
-    if (tcCol < 0) tcCol = 5;
-    let bsCol = findCol(H, ["bien_so_xe", "bien_so"]);
-    if (bsCol < 0) bsCol = 6;
-    let ptCol = findCol(H, ["partner_type", "partner"]);
-    if (ptCol < 0) ptCol = 7;
-    let ltCol = findCol(H, ["loai_tai"]);
-    if (ltCol < 0) ltCol = 8;
-    let vCol = findCol(H, ["tlld_vol"]);
-    if (vCol < 0) vCol = 9;
-    let odCol = findCol(H, ["so_don_hang", "so_don"]);
-    if (odCol < 0) odCol = 11;
-    let kgCol = findCol(H, ["khoiluong_kg", "khoi_luong"]);
-    if (kgCol < 0) kgCol = 12;
-    const g = (r: string[], i: number) => (i >= 0 && i < r.length ? (r[i] || "").trim() : "");
-
-    for (const r of rows.slice(1)) {
-      const code = normCode(r[cCol]);
-      const date = parseDate(r[dCol]);
-      const w = parseFill(r[wCol]);
-      const mc = g(r, mcCol);
-
-      if (code) {
-        let hm = hubAcc.get(code);
-        if (!hm) { hm = new Map(); hubAcc.set(code, hm); }
-        hm.set(hub, (hm.get(hub) || 0) + 1);
-      }
-
-      // Lập chỉ mục theo MÃ CHUYẾN (kể cả khi thiếu tlld_weight) để luôn tra được.
-      if (mc) {
-        const key = mc.toUpperCase();
-        const existing = byChuyen.get(key);
-        if (!existing || (existing.tlldWeight == null && w != null)) {
-          byChuyen.set(key, {
-            maChuyen: mc,
-            date: date || "",
-            code,
-            routeText: g(r, rtCol),
-            truckCap: g(r, tcCol),
-            bienSo: g(r, bsCol).replace(/^_+/, ""),
-            partner: g(r, ptCol),
-            loaiTai: g(r, ltCol),
-            tlldVol: parseFill(g(r, vCol)),
-            tlldWeight: w,
-            soDon: g(r, odCol),
-            kg: g(r, kgCol),
-          });
-        }
-        if (code) {
-          let cs = chuyenAcc.get(code);
-          if (!cs) { cs = new Set(); chuyenAcc.set(code, cs); }
-          cs.add(mc);
-        }
-      }
-
-      // Lưu mô tả lộ trình tiêu biểu cho mã tuyến (chọn chuỗi dài/đầy đủ nhất).
-      if (code) {
-        const rt = g(r, rtCol);
-        if (rt && rt.length > (routeTextAcc.get(code)?.length ?? 0)) routeTextAcc.set(code, rt);
-      }
-
-      // Gom số đơn + khối lượng theo tuyến/ngày (kể cả khi thiếu tlld_weight).
-      if (code && date) {
-        const soDon = parseFloat(g(r, odCol).replace(/,/g, "")) || 0;
-        const kg = parseFloat(g(r, kgCol).replace(/,/g, "")) || 0;
-        if (soDon || kg) {
-          let vm = volAcc.get(code);
-          if (!vm) { vm = new Map(); volAcc.set(code, vm); }
-          const ve = vm.get(date) ?? { soDon: 0, kg: 0 };
-          ve.soDon += soDon; ve.kg += kg;
-          vm.set(date, ve);
-        }
-      }
-
-      if (!code || !date || w == null) continue;
-      const ds = dayStat.get(date) ?? { n: 0, nz: 0 };
-      ds.n++;
-      if (w > 0) ds.nz++;
-      dayStat.set(date, ds);
-      let m = acc.get(code);
-      if (!m) { m = new Map(); acc.set(code, m); }
-      let e = m.get(date);
-      if (!e) { e = { nhap: { s: 0, c: 0 }, xuat: { s: 0, c: 0 }, all: { s: 0, c: 0 } }; m.set(date, e); }
-      e.all.s += w; e.all.c++;
-      const dir = dirOf(g(r, ltCol));
-      if (dir === "xuat") { e.xuat.s += w; e.xuat.c++; }
-      else if (dir === "nhap") { e.nhap.s += w; e.nhap.c++; }
-    }
+  // code -> date -> tích luỹ tlld_vol (THEO VOLUME/số đơn) — SONG SONG với `acc` (khối lượng),
+  // CÙNG cấu trúc DayAcc, độc lập hoàn toàn (không phụ thuộc tlld_weight có null hay không) —
+  // 01/09: rebuild TLLD Tuyến, Sếp yêu cầu thêm góc nhìn Volume bên cạnh khối lượng.
+  const accTlldVol = new Map<string, Map<string, DayAcc>>();
+  // ngày -> tập mã chuyến CHẠY trong ngày đó (đếm SỐ CHUYẾN/ngày cho khung Tổng Quan — không lẫn
+  // với chuyenAcc bên dưới, vốn gom theo TUYẾN chứ không theo ngày).
+  const tripsByDate = new Map<string, Set<string>>();
+  /** Cộng 1 giá trị vào DayAcc (map[code][date]) theo đúng CHIỀU đã chọn — dùng chung cho cả
+   *  tích luỹ khối lượng (acc) lẫn Volume (accTlldVol), tránh chép lại logic 2 lần. */
+  function bump(target: Map<string, Map<string, DayAcc>>, code: string, date: string, val: number, dir: "xuat" | "nhap" | "all") {
+    let m = target.get(code);
+    if (!m) { m = new Map(); target.set(code, m); }
+    let e = m.get(date);
+    if (!e) { e = { nhap: { s: 0, c: 0 }, xuat: { s: 0, c: 0 }, all: { s: 0, c: 0 } }; m.set(date, e); }
+    e.all.s += val; e.all.c++;
+    if (dir === "xuat") { e.xuat.s += val; e.xuat.c++; }
+    else if (dir === "nhap") { e.nhap.s += val; e.nhap.c++; }
   }
 
-  await Promise.all(TLLD_TABS.map((t) => fetchTab(t.gid, signal).then((text) => { if (text) processHub(t.hub, text); })));
+  // 1 dòng JSON = 1 chuyến (view đã khử trùng lặp điểm-dừng, xem 0005) -> không còn
+  // phải đoán cột/tách nhiều tab hub như CSV cũ, chỉ việc gộp thẳng vào các map trên.
+  function processDong(r: DongChuyenApi): void {
+    const code = normCode(r.ma_tuyen || "");
+    const date = r.ngay;
+    const w = r.tlld_weight_chuyen;
+    const vRatio = r.tlld_vol_chuyen;
+    const mc = r.ma_chuyen || "";
+    const hub = r.hub || "—";
+    const dir = dirOf(r.loai_tai || ""); // tính 1 lần, dùng chung cho cả khối lượng lẫn Volume
+
+    if (code) {
+      let hm = hubAcc.get(code);
+      if (!hm) { hm = new Map(); hubAcc.set(code, hm); }
+      hm.set(hub, (hm.get(hub) || 0) + 1);
+    }
+
+    // Lập chỉ mục theo MÃ CHUYẾN (kể cả khi thiếu tlld_weight) để luôn tra được.
+    if (mc) {
+      const key = mc.toUpperCase();
+      const existing = byChuyen.get(key);
+      if (!existing || (existing.tlldWeight == null && w != null)) {
+        byChuyen.set(key, {
+          maChuyen: mc,
+          date: date || "",
+          code,
+          // ⚠ Chưa có mô tả lộ trình từ nguồn Data API (khác CSV cũ có sẵn cột "route").
+          // Nơi hiển thị (SapLichTai.tsx) đã có fallback dựng từ lịch tải khi rỗng.
+          routeText: "",
+          truckCap: r.tai_trong_xe != null ? String(r.tai_trong_xe) : "",
+          bienSo: (r.bien_so || "").replace(/^_+/, ""),
+          partner: r.partner_type || "",
+          loaiTai: r.loai_tai || "",
+          tlldVol: r.tlld_vol_chuyen,
+          tlldWeight: w,
+          soDon: r.so_don_hang != null ? String(r.so_don_hang) : "",
+          kg: r.khoiluong_kg != null ? String(r.khoiluong_kg) : "",
+        });
+      }
+      if (code) {
+        let cs = chuyenAcc.get(code);
+        if (!cs) { cs = new Set(); chuyenAcc.set(code, cs); }
+        cs.add(mc);
+      }
+      if (date) {
+        let ts = tripsByDate.get(date);
+        if (!ts) { ts = new Set(); tripsByDate.set(date, ts); }
+        ts.add(mc);
+      }
+    }
+
+    // Gom số đơn + khối lượng theo tuyến/ngày (kể cả khi thiếu tlld_weight).
+    if (code && date) {
+      const soDon = r.so_don_hang || 0;
+      const kg = r.khoiluong_kg || 0;
+      if (soDon || kg) {
+        let vm = volAcc.get(code);
+        if (!vm) { vm = new Map(); volAcc.set(code, vm); }
+        const ve = vm.get(date) ?? { soDon: 0, kg: 0 };
+        ve.soDon += soDon; ve.kg += kg;
+        vm.set(date, ve);
+      }
+    }
+
+    // ---- TLLD THEO VOLUME — độc lập với khối lượng (không gộp vào gate w==null bên dưới,
+    // để 1 dòng thiếu tlld_weight nhưng có tlld_vol vẫn không mất dữ liệu Volume). ----
+    if (code && date && vRatio != null) bump(accTlldVol, code, date, vRatio, dir);
+
+    // ---- TLLD THEO KHỐI LƯỢNG — GIỮ NGUYÊN hành vi cũ (gate + dayStat) không đổi. ----
+    if (!code || !date || w == null) return;
+    const ds = dayStat.get(date) ?? { n: 0, nz: 0 };
+    ds.n++;
+    if (w > 0) ds.nz++;
+    dayStat.set(date, ds);
+    bump(acc, code, date, w, dir);
+  }
+
+  for (const r of rows) processDong(r);
 
   // Ngày "đã chốt" = ≥70% dòng có giá trị > 0 (loại ngày đang nhập dở -> toàn 0).
   const complete = [...dayStat.entries()]
@@ -372,9 +457,44 @@ async function loadTlldUncached(signal?: AbortSignal): Promise<TlldIndex> {
     const hubCounts = hubAcc.get(code);
     let hub = "—";
     if (hubCounts) { let best = -1; for (const [h, c] of hubCounts) if (c > best) { best = c; hub = h; } }
+
+    // ── TLLD THEO VOLUME — SONG SONG với khối lượng ở trên, DÙNG CHUNG chiều `dir` đã chọn
+    // (nhất quán: 1 tuyến chỉ có 1 chiều Xuất/Nhập cho cả 2 chỉ số) và CÙNG các cửa sổ ngày
+    // (last7/last14/last30/refDate) đã tính 1 lần ở trên — không tính lại. ──
+    const mVol = accTlldVol.get(code);
+    const dayValVol = (d: string): number | null => {
+      if (!mVol) return null;
+      const e = mVol.get(d);
+      if (!e) return null;
+      const pri = e[dir];
+      if (pri.c) return pri.s / pri.c;
+      const alt = dir === "xuat" ? e.nhap : e.xuat;
+      if (alt.c) return alt.s / alt.c;
+      return e.all.c ? e.all.s / e.all.c : null;
+    };
+    const meanDaysVol = (dates: string[]) => {
+      const vs = dates.map(dayValVol).filter((v): v is number => v != null);
+      return { avg: vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null, n: vs.length };
+    };
+    const seriesVol = last7.map((d) => ({ date: d, val: dayValVol(d) }));
+    const series30Vol = last30.map((d) => ({ date: d, val: dayValVol(d) }));
+    let lastDateVol: string | null = null, lastValVol: number | null = null;
+    if (mVol) for (const d of [...mVol.keys()].sort()) { const v = dayValVol(d); if (v != null && v > 0) { lastDateVol = d; lastValVol = v; } }
+    const validVol = seriesVol.filter((s) => s.val != null) as { date: string; val: number }[];
+    const avg7Vol = validVol.length ? validVol.reduce((a, s) => a + s.val, 0) / validVol.length : null;
+    const n1Vol = refDate ? dayValVol(refDate) : null;
+    const fortnightVol = meanDaysVol(last14);
+    const monthVol = meanDaysVol(last30);
+    const weekendVol = meanDaysVol(last30.filter(isWeekendISO));
+
     byCode.set(code, {
       n1, avg7, avg14: fortnight.avg, days14: fortnight.n, avg30: month.avg, days30: month.n,
       weekendAvg: weekend.avg, weekendDays: weekend.n,
+      tlldVol: {
+        n1: n1Vol, avg7: avg7Vol, avg14: fortnightVol.avg, avg30: monthVol.avg,
+        weekendAvg: weekendVol.avg, series: seriesVol, series30: series30Vol,
+        lastVal: lastValVol, lastDate: lastDateVol,
+      },
       rollCur, rollPrev, calCur, calPrev,
       eventAvg: ev.avg, eventDays: ev.n,
       days: valid.length, trips, chuyen,
@@ -382,7 +502,24 @@ async function loadTlldUncached(signal?: AbortSignal): Promise<TlldIndex> {
     });
   }
 
-  return { byCode, volByCode: volAcc, byChuyen, refDate, last7, last30, allDates: usable, event, lastSync: Date.now() };
+  // ── TỔNG CỤM THEO NGÀY (clusterDaily) — cho khung Tổng Quan TLLD: N-1 so N-2, so cùng thứ tuần
+  // trước, số chuyến/ngày. TB = trung bình ĐƠN GIẢN qua các tuyến/chuyến có chạy ngày đó (đúng quy
+  // ước "TB lấp đầy" dùng xuyên suốt dự án — không trọng số theo tải trọng/số chuyến). ──
+  const clusterDaily = new Map<string, TlldClusterDay>();
+  for (const d of usable) {
+    const wVals: number[] = [], vVals: number[] = [];
+    const routesNgayDo = new Set<string>(); // hợp cả tuyến có weight LẪN tuyến chỉ có volume — tránh đếm thiếu
+    for (const [code, m] of acc) { const e = m.get(d); if (e && e.all.c) { wVals.push(e.all.s / e.all.c); routesNgayDo.add(code); } }
+    for (const [code, m] of accTlldVol) { const e = m.get(d); if (e && e.all.c) { vVals.push(e.all.s / e.all.c); routesNgayDo.add(code); } }
+    clusterDaily.set(d, {
+      weightAvg: wVals.length ? wVals.reduce((a, b) => a + b, 0) / wVals.length : null,
+      volAvg: vVals.length ? vVals.reduce((a, b) => a + b, 0) / vVals.length : null,
+      tripCount: tripsByDate.get(d)?.size ?? 0,
+      routeCount: routesNgayDo.size,
+    });
+  }
+
+  return { byCode, volByCode: volAcc, byChuyen, refDate, last7, last30, allDates: usable, event, clusterDaily, lastSync: Date.now() };
 }
 
 /* ---------- Tóm tắt TLLD theo nhóm tuyến cho trợ lý AI ---------- */
@@ -424,4 +561,132 @@ export function buildTlldDigest(
   const sortHigh = [...items].sort((a, b) => (valOf(b.tlld) ?? 0) - (valOf(a.tlld) ?? 0));
   L.push(`Tuyến CAO nhất: ${sortHigh.slice(0, 8).map((x) => `${x.code} ${pc(valOf(x.tlld))}`).join(", ")}.`);
   return L.join("\n");
+}
+
+/* ============================================================
+   TỔNG QUAN TLLD — Sức khoẻ vận hành: scorecard N-1/N-2/cùng thứ tuần trước,
+   tuyến/chuyến lệch khối lượng-Volume, chuyến TLLD thấp, chi tiết điểm dừng.
+   Thêm 01/09/2026 khi rebuild TLLD Tuyến theo yêu cầu Sếp.
+   ============================================================ */
+
+/** So sánh 1 chỉ số cụm (weightAvg/volAvg/tripCount) giữa 2 ngày — trả về cả 2 giá trị + delta. */
+export interface SoSanhNgay { ngay: string | null; giaTri: number | null; ngayKia: string | null; giaTriKia: number | null; delta: number | null; deltaPct: number | null; }
+function soSanh1Ngay(clusterDaily: Map<string, TlldClusterDay>, ngay: string | null, ngayKia: string | null, sel: (d: TlldClusterDay) => number | null): SoSanhNgay {
+  const a = ngay ? clusterDaily.get(ngay) : undefined;
+  const b = ngayKia ? clusterDaily.get(ngayKia) : undefined;
+  const va = a ? sel(a) : null, vb = b ? sel(b) : null;
+  return {
+    ngay, giaTri: va, ngayKia, giaTriKia: vb,
+    delta: va != null && vb != null ? va - vb : null,
+    deltaPct: va != null && vb != null && vb !== 0 ? (va / vb - 1) : null,
+  };
+}
+
+export interface TongQuanTlld {
+  refDate: string | null;
+  ngayTruoc: string | null; // N-2 (liền trước N-1)
+  cungThuTuanTruoc: string | null; // N-1 trừ 7 ngày (cùng thứ tuần trước)
+  weightSoN2: SoSanhNgay; weightSoTuanTruoc: SoSanhNgay;
+  volSoN2: SoSanhNgay; volSoTuanTruoc: SoSanhNgay;
+  soChuyenSoN2: SoSanhNgay; soChuyenSoTuanTruoc: SoSanhNgay;
+  soChuyenN1: number | null; soTuyenN1: number | null;
+}
+
+/** Dựng khung Tổng Quan TLLD (scorecard N-1 vs N-2 + vs cùng thứ tuần trước) từ clusterDaily. */
+export function buildTongQuanTlld(index: TlldIndex): TongQuanTlld {
+  const refDate = index.refDate;
+  const ngayTruoc = refDate ? addDaysISO(refDate, -1) : null;
+  const cungThuTuanTruoc = refDate ? addDaysISO(refDate, -7) : null;
+  const cd = index.clusterDaily;
+  const w = (d: TlldClusterDay) => d.weightAvg;
+  const v = (d: TlldClusterDay) => d.volAvg;
+  const t = (d: TlldClusterDay) => d.tripCount;
+  const cur = refDate ? cd.get(refDate) : undefined;
+  return {
+    refDate, ngayTruoc, cungThuTuanTruoc,
+    weightSoN2: soSanh1Ngay(cd, refDate, ngayTruoc, w),
+    weightSoTuanTruoc: soSanh1Ngay(cd, refDate, cungThuTuanTruoc, w),
+    volSoN2: soSanh1Ngay(cd, refDate, ngayTruoc, v),
+    volSoTuanTruoc: soSanh1Ngay(cd, refDate, cungThuTuanTruoc, v),
+    soChuyenSoN2: soSanh1Ngay(cd, refDate, ngayTruoc, t),
+    soChuyenSoTuanTruoc: soSanh1Ngay(cd, refDate, cungThuTuanTruoc, t),
+    soChuyenN1: cur?.tripCount ?? null,
+    soTuyenN1: cur?.routeCount ?? null,
+  };
+}
+
+/** Danh sách CHUYẾN (không phải tuyến) có TLLD thấp — góc nhìn "1 lịch tải có nhiều chuyến theo
+ *  từng ngày", khác `low`/`over` ở buildColumns() vốn tính theo TB TUYẾN. Bỏ 0% (khả năng không
+ *  chạy/không có dữ liệu thật) — cùng ngưỡng với quy ước "lãng phí" dùng ở Overview.tsx. */
+export function danhSachChuyenThap(
+  index: TlldIndex,
+  opts: { theo?: "weight" | "vol"; nguong?: number; n?: number } = {}
+): TlldChuyen[] {
+  const theo = opts.theo ?? "weight";
+  const nguong = opts.nguong ?? 0.6;
+  const n = opts.n ?? 30;
+  const val = (c: TlldChuyen) => (theo === "weight" ? c.tlldWeight : c.tlldVol);
+  return [...index.byChuyen.values()]
+    .filter((c) => { const x = val(c); return x != null && x >= 0.005 && x < nguong; })
+    .sort((a, b) => val(a)! - val(b)!)
+    .slice(0, n);
+}
+
+export interface TlldLechKhoiLuongTheTich {
+  code: string;
+  weight: number; // avg7 (fallback n1) khối lượng
+  volume: number; // avg7 (fallback n1) Volume
+  lech: number; // weight - volume (âm = khối lượng thấp hơn Volume, dương = ngược lại)
+}
+
+/** Tuyến có TLLD khối lượng và Volume LỆCH NHAU đáng kể (vd đơn nhẹ-cồng kềnh: đầy Volume
+ *  nhưng nhẹ cân, hoặc ngược lại đơn nặng-gọn: đầy cân nhưng thừa chỗ) — Sếp yêu cầu 01/09. */
+export function computeLechKhoiLuongTheTich(index: TlldIndex, nguong = 0.15): TlldLechKhoiLuongTheTich[] {
+  const out: TlldLechKhoiLuongTheTich[] = [];
+  for (const [code, t] of index.byCode) {
+    const w = t.avg7 ?? t.n1;
+    const v = t.tlldVol.avg7 ?? t.tlldVol.n1;
+    if (w == null || v == null) continue;
+    const lech = w - v;
+    if (Math.abs(lech) < nguong) continue;
+    out.push({ code, weight: w, volume: v, lech });
+  }
+  return out.sort((a, b) => Math.abs(b.lech) - Math.abs(a.lech));
+}
+
+/** 1 điểm dừng của 1 chuyến — mức chi tiết nhất (tlld_daily), tải RIÊNG theo yêu cầu (không gộp
+ *  sẵn như byChuyen — 1 chuyến trung bình ~3.3 điểm dừng, tải hết mọi chuyến sẽ rất nặng). */
+export interface TlldDiemDung {
+  ngay: string; maChuyen: string; thuTu: number;
+  kho: string | null; khoTruocDo: string | null; khoTiepTheo: string | null;
+  loaiTai: string | null;
+  khoiluongKg: number | null; soDonHang: number | null;
+  tlldWeightDiem: number | null; tlldVolDiem: number | null;
+}
+interface DiemDungApi {
+  ngay: string; ma_chuyen: string; thu_tu: number; kho: string | null;
+  kho_truoc_do: string | null; kho_tiep_theo: string | null; loai_tai: string | null;
+  khoiluong_kg: number | null; so_don_hang: number | null;
+  tlld_weight_diem: number | null; tlld_vol_diem: number | null;
+}
+/** Tải chi tiết TỪNG ĐIỂM DỪNG của 1 chuyến (theo mã chuyến) — dùng khi Sếp mở xem 1 chuyến cụ
+ *  thể trong TLLD Tuyến (góc nhìn "theo điểm dừng" thay vì "cả chuyến"). Không cache — tra theo
+ *  yêu cầu, khối lượng nhỏ (1 chuyến ~3-4 điểm dừng). */
+export async function fetchDiemDungChuyen(maChuyen: string, signal?: AbortSignal): Promise<TlldDiemDung[]> {
+  const q = maChuyen.trim();
+  if (!q) return [];
+  const res = await fetchWithTimeout(
+    "/api/tlld-live?muc=diem&ma_chuyen=" + encodeURIComponent(q) + "&_=" + Date.now(),
+    { cache: "no-store", signal },
+    15000
+  );
+  if (!res.ok) throw new Error("tlld_diem_" + res.status);
+  const d = await res.json();
+  if (!d?.ok) throw new Error(d?.detail || d?.error || "tlld_diem_loi");
+  return ((d.rows || []) as DiemDungApi[]).map((r) => ({
+    ngay: r.ngay, maChuyen: r.ma_chuyen, thuTu: r.thu_tu,
+    kho: r.kho, khoTruocDo: r.kho_truoc_do, khoTiepTheo: r.kho_tiep_theo, loaiTai: r.loai_tai,
+    khoiluongKg: r.khoiluong_kg, soDonHang: r.so_don_hang,
+    tlldWeightDiem: r.tlld_weight_diem, tlldVolDiem: r.tlld_vol_diem,
+  }));
 }

@@ -1,8 +1,10 @@
 /* Gộp LỊCH TẢI của TẤT CẢ vùng -> Map<mã tuyến chuẩn hoá, Route> (realtime).
    Dùng để khớp lộ trình (giờ tới/rời, loại hình) + tải trọng cho thẻ TLLD dù
-   tuyến nằm ở vùng nào — đồng bộ trực tiếp với Google Sheet. */
+   tuyến nằm ở vùng nào.
+   01/09/2026: đổi nguồn từ Google Sheet (loadSheet) sang Supabase (loadRegion) —
+   cùng hình dạng Route[] nên chỉ đổi hàm gọi + khoá vùng (gid -> region key). */
 import { useEffect, useMemo, useState } from "react";
-import { loadSheet } from "./sheet";
+import { loadRegion } from "./db/lichTaiApi";
 import { startPoll } from "./poll";
 import { SHEETS, REFRESH_MS, EXCLUDED_REGION_KEYS } from "../config";
 import { normCode } from "./tlld";
@@ -21,7 +23,7 @@ export async function loadAllRoutes(signal?: AbortSignal): Promise<Map<string, R
   // tuyến, xem config.ts EXCLUDED_REGION_KEYS) khỏi TỔNG HỢP toàn cụm — RÀ LẠI 2026-07-21 (Sếp báo
   // "Lịch tải đang tính sai"): cùng bug đã sửa ở fleetMix.ts trước đây nhưng sót file này.
   const results = await Promise.all(
-    SHEETS.filter((s) => !EXCLUDED_REGION_KEYS.includes(s.key)).map((s) => loadSheet(s.gid, signal).catch(() => null))
+    SHEETS.filter((s) => !EXCLUDED_REGION_KEYS.includes(s.key)).map((s) => loadRegion(s.key, signal).catch(() => null))
   );
   const map = new Map<string, Route>();
   for (const res of results) {
