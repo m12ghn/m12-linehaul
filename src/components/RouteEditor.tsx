@@ -11,13 +11,18 @@
    Mọi thao tác đều lạc quan-nhưng-an-toàn: gọi API xong mới refresh, lỗi thì hiện
    nguyên văn tiếng Việt ngay tại dòng đó.
    ============================================================ */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   createRoute, updateRoute, deleteRoute,
   createStop, updateStop, deleteStop, reorderStops,
   exportToSheet, editErrorText,
   type DbRoute, type DbStop, type MutResult,
 } from "../lib/db/lichTaiApi";
+import { exportLichTai } from "../lib/exportExcel";
+import {
+  parseBulkGrid, readWorkbookFile, uploadBulkRoutes,
+  type BulkParseResult, type BulkUploadResponse,
+} from "../lib/bulkImportLichTai";
 
 const LOAI_HINH = ["Phân loại", "Lấy", "Giao", "Giao và lấy"];
 
@@ -194,14 +199,140 @@ export function RouteEditor({
 }
 
 // ------------------------------------------------------------
-// Thanh công cụ vùng: tạo tuyến mới + xuất ra Sheet
+// TẢI LÊN HÀNG LOẠT (bulk upload) — thêm 03/09/2026. CHỈ admin (canBulkUpload,
+// gate từ useAdmin() ở App.tsx, SIẾT hơn quyền RBAC "edit" của canEdit/canExport
+// ở trên — bulk upload ghi đè nhiều tuyến 1 lúc, rủi ro cao hơn sửa từng dòng).
+//
+// 3 bước: (1) chọn file -> đọc + gộp thành danh sách tuyến/điểm dừng NGAY TRÊN
+// TRÌNH DUYỆT (parseBulkGrid, chưa gửi đi gì) -> hiện xem trước (mấy tuyến MỚI/
+// mấy tuyến sẽ SỬA, dò theo mã đã có trong `existingCodes`) -> (2) Sếp bấm Xác
+// nhận mới thật sự gửi lên /api/lichtai-bulk -> (3) hiện đúng câu Sếp yêu cầu:
+// "Nhận xx Tuyến, đã tải lên thành công xx tuyến; không thành công xx tuyến."
+// ------------------------------------------------------------
+function BulkUploadPanel({
+  regionKey, regionLabel, existingCodes, onChanged,
+}: {
+  regionKey: string; regionLabel: string; existingCodes: Set<string>; onChanged: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState("");
+  const [parsed, setParsed] = useState<BulkParseResult | null>(null);
+  const [readErr, setReadErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<BulkUploadResponse | null>(null);
+
+  function reset() {
+    setFileName(""); setParsed(null); setReadErr(""); setResult(null);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  async function onPickFile(f: File | undefined) {
+    setResult(null); setReadErr(""); setParsed(null);
+    if (!f) return;
+    setFileName(f.name);
+    try {
+      const grid = await readWorkbookFile(f);
+      const p = parseBulkGrid(grid);
+      if (!p.routes.length) setReadErr("Không đọc được tuyến nào từ file — kiểm tra lại đúng file/định dạng.");
+      setParsed(p);
+    } catch (e) {
+      setReadErr(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function confirmUpload() {
+    if (!parsed || !parsed.routes.length) return;
+    setBusy(true);
+    const r = await uploadBulkRoutes(regionKey, parsed.routes);
+    setBusy(false);
+    setResult(r);
+    if (r.ok && r.success > 0) onChanged();
+  }
+
+  const newCount = parsed ? parsed.routes.filter((r) => !existingCodes.has(r.code)).length : 0;
+  const editCount = parsed ? parsed.routes.length - newCount : 0;
+  const failedRows = result?.results.filter((r) => r.status === "error") || [];
+
+  return (
+    <div className="re-new re-bulk">
+      <div className="muted">
+        Tải lên hàng loạt cho vùng <b>{regionLabel}</b> — đúng bố cục cột nút <b>"Tải Lịch (Excel)"</b> phía
+        dưới (Tên tuyến / Tải trọng / ID / Tên kho / Loại hình / Tới điểm / Rời điểm). Tuyến đã có mã sẽ
+        được SỬA (thay toàn bộ điểm dừng cũ), tuyến chưa có sẽ được TẠO MỚI.
+      </div>
+      <div className="re-bulk-actions">
+        <button type="button" onClick={() => exportLichTai([], regionLabel)}>⬇ Tải file trống (mẫu)</button>
+        <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}>
+          📄 Chọn file Excel…
+        </button>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }}
+          onChange={(e) => onPickFile(e.target.files?.[0])} />
+        {fileName && <span className="muted">{fileName}</span>}
+      </div>
+
+      {readErr && <div className="rc-err">{readErr}</div>}
+
+      {parsed && !readErr && !result && (
+        <div className="re-bulk-preview">
+          <div>
+            Đọc được <b>{parsed.routes.length}</b> tuyến, <b>{parsed.totalStops}</b> điểm dừng —
+            {" "}<b>{newCount}</b> tuyến MỚI, <b>{editCount}</b> tuyến sẽ SỬA (trùng mã đã có).
+          </div>
+          {parsed.warnings.map((w, i) => <div key={i} className="rc-err">{w}</div>)}
+          <div className="re-bulk-actions">
+            <button className="pl-calc" disabled={busy || !parsed.routes.length} onClick={confirmUpload}>
+              {busy ? "Đang tải lên…" : `Xác nhận tải lên ${parsed.routes.length} tuyến`}
+            </button>
+            <button type="button" onClick={reset} disabled={busy}>Huỷ</button>
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <div className="re-bulk-result">
+          {result.ok ? (
+            <>
+              <div className={failedRows.length ? "rc-err" : "muted"}>
+                Nhận <b>{result.total}</b> tuyến, đã tải lên thành công <b>{result.success}</b> tuyến;
+                không thành công <b>{result.failed}</b> tuyến.
+              </div>
+              {failedRows.length > 0 && (
+                <ul className="re-bulk-fail-list">
+                  {failedRows.slice(0, 50).map((r, i) => (
+                    <li key={i}><b>{r.code}</b>: {r.error}</li>
+                  ))}
+                  {failedRows.length > 50 && <li>… và {failedRows.length - 50} tuyến lỗi khác.</li>}
+                </ul>
+              )}
+            </>
+          ) : (
+            <div className="rc-err">
+              Không tải lên được: {result.detail || result.error}
+            </div>
+          )}
+          <button type="button" onClick={reset}>Tải file khác</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ------------------------------------------------------------
+// Thanh công cụ vùng: tạo tuyến mới + xuất ra Sheet + tải lên hàng loạt
 // ------------------------------------------------------------
 export function RegionToolbar({
-  regionKey, regionLabel, canEdit, canExport, onChanged,
+  regionKey, regionLabel, canEdit, canExport, canBulkUpload, existingCodes, onChanged,
 }: {
-  regionKey: string; regionLabel: string; canEdit: boolean; canExport: boolean; onChanged: () => void;
+  regionKey: string; regionLabel: string; canEdit: boolean; canExport: boolean;
+  /** CHỈ admin — xem comment ở BulkUploadPanel. Mặc định false nếu không truyền (view khác, vd GSVT,
+   *  chưa cần tính năng này). */
+  canBulkUpload?: boolean;
+  /** Mã tuyến đang có sẵn trong vùng (để xem trước MỚI/SỬA trước khi tải lên) — chỉ cần khi canBulkUpload. */
+  existingCodes?: Set<string>;
+  onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [form, setForm] = useState({ code: "", category: "", load: "", ncc: "", bks: "" });
   const [exportMsg, setExportMsg] = useState("");
   const { busy, err, run } = useBusy();
@@ -209,8 +340,13 @@ export function RegionToolbar({
   return (
     <div className="re-toolbar">
       {canEdit && (
-        <button className="pl-calc" onClick={() => setOpen((v) => !v)}>
+        <button className="pl-calc" onClick={() => { setOpen((v) => !v); setBulkOpen(false); }}>
           {open ? "Đóng" : "+ Tuyến mới"}
+        </button>
+      )}
+      {canBulkUpload && (
+        <button onClick={() => { setBulkOpen((v) => !v); setOpen(false); }}>
+          {bulkOpen ? "Đóng" : "📤 Tải lên hàng loạt"}
         </button>
       )}
       {canExport && (
@@ -243,6 +379,14 @@ export function RegionToolbar({
             }}>{busy ? "Đang tạo…" : "Tạo tuyến"}</button>
           {err && <div className="rc-err">{err}</div>}
         </div>
+      )}
+
+      {bulkOpen && canBulkUpload && (
+        <BulkUploadPanel
+          regionKey={regionKey} regionLabel={regionLabel}
+          existingCodes={existingCodes || new Set()}
+          onChanged={onChanged}
+        />
       )}
     </div>
   );

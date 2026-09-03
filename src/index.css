@@ -1879,6 +1879,15 @@ footer .dot-sep { margin: 0 6px; opacity: .5; }
 }
 .re-new > .muted { flex-basis: 100%; }
 
+/* Tải lên hàng loạt (BulkUploadPanel, RouteEditor.tsx) — thêm 03/09/2026. */
+.re-bulk-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.re-bulk-preview, .re-bulk-result {
+  width: 100%; margin-top: 10px; padding-top: 10px;
+  border-top: 1px dashed var(--border, var(--border-subtle));
+}
+.re-bulk-fail-list { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--red, var(--color-danger)); }
+.re-bulk-fail-list li { margin-bottom: 3px; }
+
 .route-editor { margin-bottom: 14px; }
 .re-head {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;

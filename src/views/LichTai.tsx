@@ -99,6 +99,9 @@ export function LichTai({
     () => (category ? data.routes.filter((r) => r.category === category) : data.routes),
     [data.routes, category]
   );
+  // Mã tuyến đang có trong CẢ VÙNG (không chỉ loại tuyến đang chọn) — cho khung xem trước của
+  // "Tải lên hàng loạt" biết tuyến nào sẽ TẠO MỚI / tuyến nào sẽ SỬA trước khi Sếp xác nhận.
+  const existingCodes = useMemo(() => new Set(data.routes.map((r) => r.route)), [data.routes]);
   const q = normSearch(search);
   const qBks = search.toLowerCase().replace(/[^a-z0-9]/g, ""); // biển số: bỏ dấu "-"/khoảng trắng để khớp "50H26441" ~ "50H-26441" ~ "26441"
   // ID bưu cục (cột "ID" trong Sheet) — CHỈ coi là tìm theo ID khi cả câu tìm (bỏ khoảng trắng/dấu
@@ -246,6 +249,8 @@ export function LichTai({
           regionLabel={regionLabel}
           canEdit={!!canEdit}
           canExport={!!canExport}
+          canBulkUpload={!!canEditRoute}
+          existingCodes={existingCodes}
           onChanged={onRefresh}
         />
       )}

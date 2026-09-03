@@ -305,11 +305,59 @@ export function TlldTuyen({
 
   return (
     <>
+      {/* BỘ LỌC "TRA CỨU" — thay ô tìm kiếm cũ, đóng băng ở ĐẦU TRANG khi cuộn (03/09; đưa lên trên
+          cùng — TRƯỚC cả khung Sức khoẻ + KPI — theo phản hồi Sếp sau khi xem bản đầu đặt dưới 2
+          khung đó). CHỈ DÙNG ĐỂ TRA CỨU — không đụng index/regionIndex hay bất kỳ tính toán nào bên
+          dưới, xem chi tiết ở khối state runLookup() phía trên. */}
+      <div className="toolbar tlld-lookup-bar">
+        <div className="tlld-lookup-fields">
+          <label className="tlld-lookup-f">
+            <span>Từ ngày</span>
+            <input type="date" value={fFrom} max={fTo || undefined} onChange={(e) => setFFrom(e.target.value)} />
+          </label>
+          <label className="tlld-lookup-f">
+            <span>Đến ngày</span>
+            <input type="date" value={fTo} min={fFrom || undefined} onChange={(e) => setFTo(e.target.value)} />
+          </label>
+          <label className="tlld-lookup-f">
+            <span>Mã tuyến</span>
+            <input
+              type="text"
+              placeholder="VD: HCM01-…"
+              value={fMaTuyen}
+              onChange={(e) => setFMaTuyen(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") runLookup(); }}
+            />
+          </label>
+          <label className="tlld-lookup-f">
+            <span>Mã chuyến</span>
+            <input
+              type="text"
+              placeholder="VD: CH…"
+              value={fMaChuyen}
+              onChange={(e) => setFMaChuyen(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") runLookup(); }}
+            />
+          </label>
+          <button type="button" className="refresh-btn" onClick={() => runLookup()} disabled={lookupLoading}>
+            {lookupLoading ? "Đang tra…" : "🔎 Tra cứu"}
+          </button>
+          {lookupTouched && (
+            <button type="button" className="refresh-btn" onClick={clearLookup}>Xoá lọc</button>
+          )}
+        </div>
+        <button className={"refresh-btn" + (loading ? " spin" : "")} onClick={refresh} disabled={loading}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
+          </svg>
+          {loading ? "Đang tải TLLD…" : "Làm mới"}
+        </button>
+      </div>
+
       {/* SỨC KHOẺ VẬN HÀNH TLLD — LỌC THEO VÙNG đang chọn (regionIndex, đổi theo sheetKey/tab —
           Sếp yêu cầu 01/09), KHÔNG còn xem toàn cụm như bản đầu. Xem src/components/TlldSucKhoe.tsx
-          + useTlldRegion() ở lib/useTlld.ts. Đặt TRÊN CÙNG vì đây là bức tranh tổng của vùng trước
-          khi duyệt từng tuyến + lọc thêm loại tuyến ở khung phía dưới. KHÔNG bị ảnh hưởng bởi bộ lọc
-          Tra cứu bên dưới (03/09 — chỉ dùng để tra cứu, không đụng khung này). */}
+          + useTlldRegion() ở lib/useTlld.ts. KHÔNG bị ảnh hưởng bởi bộ lọc Tra cứu ở trên (03/09 —
+          chỉ dùng để tra cứu, không đụng khung này). */}
       <TlldSucKhoe index={regionIndex} />
 
       <div className="kpi-row tlld" style={{ marginTop: 16 }}>
@@ -360,52 +408,6 @@ export function TlldTuyen({
         active={category}
         onChange={setCategory}
       />
-
-      {/* BỘ LỌC "TRA CỨU" — thay ô tìm kiếm cũ, đóng băng ở đầu khi cuộn trang (Sếp yêu cầu 03/09). */}
-      <div className="toolbar tlld-lookup-bar">
-        <div className="tlld-lookup-fields">
-          <label className="tlld-lookup-f">
-            <span>Từ ngày</span>
-            <input type="date" value={fFrom} max={fTo || undefined} onChange={(e) => setFFrom(e.target.value)} />
-          </label>
-          <label className="tlld-lookup-f">
-            <span>Đến ngày</span>
-            <input type="date" value={fTo} min={fFrom || undefined} onChange={(e) => setFTo(e.target.value)} />
-          </label>
-          <label className="tlld-lookup-f">
-            <span>Mã tuyến</span>
-            <input
-              type="text"
-              placeholder="VD: HCM01-…"
-              value={fMaTuyen}
-              onChange={(e) => setFMaTuyen(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") runLookup(); }}
-            />
-          </label>
-          <label className="tlld-lookup-f">
-            <span>Mã chuyến</span>
-            <input
-              type="text"
-              placeholder="VD: CH…"
-              value={fMaChuyen}
-              onChange={(e) => setFMaChuyen(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") runLookup(); }}
-            />
-          </label>
-          <button type="button" className="refresh-btn" onClick={() => runLookup()} disabled={lookupLoading}>
-            {lookupLoading ? "Đang tra…" : "🔎 Tra cứu"}
-          </button>
-          {lookupTouched && (
-            <button type="button" className="refresh-btn" onClick={clearLookup}>Xoá lọc</button>
-          )}
-        </div>
-        <button className={"refresh-btn" + (loading ? " spin" : "")} onClick={refresh} disabled={loading}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
-          </svg>
-          {loading ? "Đang tải TLLD…" : "Làm mới"}
-        </button>
-      </div>
 
       <div className="statusbar">
         {error ? (
