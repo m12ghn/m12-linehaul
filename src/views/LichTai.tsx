@@ -56,6 +56,7 @@ export function LichTai({
   gid,
   canEdit,
   canExport,
+  canEditRoute,
   onSaved,
   onSwitchRegion,
 }: {
@@ -74,8 +75,13 @@ export function LichTai({
   mapMode: "auto" | "mymap";
   setMapMode: (m: "auto" | "mymap") => void;
   gid?: string;
+  /** Quyền RBAC "lich-tai/edit" — dùng CHO "+ Tuyến mới" (RegionToolbar), KHÔNG dùng cho nút ✎
+   *  trên từng thẻ tuyến nữa (xem canEditRoute, 03/09). */
   canEdit?: boolean;
   canExport?: boolean;
+  /** Chỉ true khi vai trò = admin — gate nút "✎ Sửa" trên RouteCard (03/09, Sếp yêu cầu tách
+   *  riêng khỏi quyền RBAC "edit" vốn cấp cho nhiều vai trò hơn). */
+  canEditRoute?: boolean;
   onSaved?: () => void;
   /** Chuyển sang vùng khác (theo gid) — dùng khi tìm không thấy ở vùng hiện tại nhưng có ở vùng khác. */
   onSwitchRegion?: (gid: string) => void;
@@ -291,7 +297,7 @@ export function LichTai({
             onSelect={(id) => setSelected(id === selected ? null : id)}
             onRetry={onRefresh}
             fleet={fleet}
-            canEdit={canEdit}
+            canEditRoute={canEditRoute}
             onSaved={onSaved}
           />
           {filtered.length > visible ? (

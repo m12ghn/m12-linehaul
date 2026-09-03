@@ -37,28 +37,34 @@ function totalHaversine(r: CardRoute): number {
  * còn tồn tại trên Vercel — sửa tại chỗ kiểu cũ này thực ra đang lỗi âm thầm
  * trên production). Thay bằng nút ✎ mở NGUYÊN <RouteEditor> (đã dùng ổn ở tab
  * Nhập liệu cũ) ngay trong thẻ — bỏ hẳn tab "✏️ Nhập liệu" riêng. Thêm nút "ⓘ"
- * xem lịch sử sửa (audit_log, đã có sẵn hạ tầng ghi) ở cấp TUYẾN lẫn từng ĐIỂM DỪNG.
+ * xem lịch sử sửa (audit_log, đã có sẵn hạ tầng ghi).
  *
- * `canEdit` chỉ thực sự bật sửa/audit khi tuyến có `id` (dữ liệu Supabase) — GSVT
- * truyền dữ liệu chỉ đọc (không có `id`) nên dù `canEdit` có bật cũng không hiện nút.
+ * 03/09 tối, theo phản hồi Sếp:
+ *  - Nút "ⓘ" CHỈ còn ở cấp TUYẾN (bỏ hẳn ở từng điểm dừng — quá rối mắt).
+ *  - Nút "ⓘ" hiện cho MỌI người dùng đã đăng nhập xem được Lịch Tải (chỉ cần
+ *    tuyến có `id` thật từ Supabase), TÁCH RIÊNG khỏi quyền sửa.
+ *  - Nút "✎ Sửa" (mở RouteEditor) CHỈ hiện cho đúng vai trò `admin` — `canEditRoute`
+ *    truyền từ App.tsx (`useAdmin().isAdmin`), không dùng chung với quyền RBAC
+ *    "lich-tai/edit" nữa (quyền đó vẫn giữ cho "+ Tuyến mới"/"Xuất Google Sheet").
  */
 export function RouteCard({
   route,
   open,
   onSelect,
   vehicle,
-  canEdit = false,
+  canEditRoute = false,
   onSaved,
 }: {
   route: CardRoute;
   open: boolean;
   onSelect: () => void;
   vehicle?: { bks: string; tx: string; sdt: string; ncc: string };
-  canEdit?: boolean;
+  canEditRoute?: boolean;
   onSaved?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const editable = canEdit && !!route.id;
+  const hasDbId = !!route.id;
+  const editable = canEditRoute && hasDbId;
   const km = totalHaversine(route);
   const n = route.stops.length;
   const sum = `${n} điểm dừng${route.mappedCount > 1 ? ` · ~${km.toFixed(1)} km` : ""}`;
@@ -93,13 +99,12 @@ export function RouteCard({
             <col className="c-loai" />
             <col className="c-den" />
             <col className="c-roi" />
-            {editable && <col className="c-act" />}
           </colgroup>
           <thead>
             <tr>
               <th className="rc-th-tuyen">
                 Tên Tuyến
-                {editable && (
+                {hasDbId && (
                   <span onClick={(e) => e.stopPropagation()} style={{ marginLeft: 6 }}>
                     <AuditInfo table="routes" rowId={route.id!} />
                   </span>
@@ -122,7 +127,6 @@ export function RouteCard({
               <th>Loại Hình</th>
               <th>Đến</th>
               <th>Rời</th>
-              {editable && <th />}
             </tr>
           </thead>
           <tbody>
@@ -158,11 +162,6 @@ export function RouteCard({
                   <td className="rc-type">{s.loaiHinh || "—"}</td>
                   <td className="num">{s.toi || "—"}</td>
                   <td className="num">{s.roi || "—"}</td>
-                  {editable && (
-                    <td onClick={(e) => e.stopPropagation()}>
-                      {s.sid && <AuditInfo table="stops" rowId={s.sid} />}
-                    </td>
-                  )}
                 </tr>
               );
             })}

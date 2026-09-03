@@ -24,6 +24,7 @@ import { useLichTai } from "./lib/db/useLichTai";
 import { initAutoReload } from "./lib/autoReload";
 import { initLiveGeo } from "./lib/geo";
 import { useUser, addressOf } from "./lib/useUser";
+import { useAdmin } from "./lib/useAdmin";
 import { onNav } from "./lib/nav";
 import { loadRbac, useMyRole } from "./lib/usePermissions";
 import { normSearch } from "./lib/normalize";
@@ -58,6 +59,10 @@ export default function App() {
   // trả về nên chỉ đổi đúng dòng này + tham số (gid -> key, region_key trên Supabase).
   const { data, refreshing, refresh } = useLichTai(sheet.key);
   const { canOpen, canDo } = useMyRole(); // kiểm tra quyền theo vai trò -> chặn cả tầng render, không chỉ khoá tab
+  // Nút "✎ Sửa" trên từng thẻ tuyến (Lịch Tải) CHỈ hiện cho đúng vai trò admin (Sếp yêu cầu
+  // 03/09), tách riêng khỏi quyền RBAC "lich-tai/edit" (canDo ở trên) vốn còn cấp cho "+ Tuyến
+  // mới"/"Xuất Google Sheet" và có thể đúng cho nhiều vai trò khác admin.
+  const { isAdmin } = useAdmin();
   // Trước đây phải làm mới 2 lần cách nhau 2.5s vì ghi vào Sheet có độ trễ lan truyền (gviz).
   // Ghi vào Supabase đọc lại được đúng ngay -> không cần trò làm mới kép nữa, nhưng vẫn giữ tên
   // refreshSoon (nhiều nơi đang gọi) để không phải sửa thêm chỗ khác trong lần đổi này.
@@ -166,6 +171,7 @@ export default function App() {
                 gid={sheet.gid}
                 canEdit={canDo("lich-tai", "edit")}
                 canExport={canDo("lich-tai", "export")}
+                canEditRoute={isAdmin}
                 onSaved={refreshSoon}
                 onSwitchRegion={(g) => { const s = VISIBLE_SHEETS.find((x) => x.gid === g); if (s) setSheetKey(s.key); }}
               />

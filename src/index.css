@@ -223,7 +223,6 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .rc-sched-tbl col.c-loai { width: 120px; }
 .rc-sched-tbl col.c-den { width: 62px; }
 .rc-sched-tbl col.c-roi { width: 62px; }
-.rc-sched-tbl col.c-act { width: 26px; }
 .rc-sched-tbl th { text-align: left; font-size: 13.5px; text-transform: uppercase; letter-spacing: .02em; color: var(--muted); font-weight: 800; padding: 6px 8px; background: var(--bg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rc-sched-tbl th.rc-th-tuyen { text-align: center; }
 /* Ô header này gộp Tên Kho + tổng điểm + thông tin xe (biển số/tài xế/SĐT). Cho XUỐNG DÒNG
