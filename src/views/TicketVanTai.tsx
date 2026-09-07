@@ -24,8 +24,15 @@ import { loadTickets, TICKET_CATEGORIES, type Ticket, type TicketData, type Tick
 import { startPoll } from "../lib/poll";
 import { REFRESH_MS } from "../config";
 import { normSearch } from "../lib/normalize";
+import { useMyRole } from "../lib/usePermissions";
+import { getUser } from "../lib/useUser";
+import {
+  loadTicketStatus, setTicketStatus, addTicketNote, TICKET_STATUS_META,
+  type TicketStatusData, type TicketStatusValue, type TicketStatusRow, type TicketNote,
+} from "../lib/ticketStatus";
 
 let cache: TicketData | null = null;
+let statusCache: TicketStatusData | null = null;
 
 /** Nhãn ngắn + icon + màu (dùng lại .btbd-pill, xem index.css) cho từng loại yêu cầu. */
 const CATEGORY_META: Record<TicketCategory, { icon: string; short: string; cls: string }> = {
@@ -59,6 +66,10 @@ export function TicketVanTai() {
   const [category, setCategory] = useState<string>("");
   const [group, setGroup] = useState<string>("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [statusData, setStatusData] = useState<TicketStatusData | null>(statusCache);
+  const { canDo } = useMyRole();
+  const canManage = canDo("ticket-vt", "edit");
+  const myEmail = getUser()?.email || "";
 
   useEffect(() => {
     let alive = true;
@@ -78,6 +89,48 @@ export function TicketVanTai() {
     const stop = startPoll(() => run(), REFRESH_MS);
     return () => { alive = false; stop(); };
   }, []);
+
+  // Trạng thái/note (07/09/2026, yêu cầu #4) — tách poll riêng khỏi log Telegram
+  // vì đọc từ Supabase (api/tickets.ts), không phải Sheet, và có thể đổi bởi
+  // GSVT khác đang thao tác cùng lúc.
+  useEffect(() => {
+    let alive = true;
+    const run = () => {
+      loadTicketStatus()
+        .then((d) => { if (alive) { statusCache = d; setStatusData(d); } })
+        .catch(() => { /* không chặn xem ticket nếu phần trạng thái lỗi tải */ });
+    };
+    run();
+    const stop = startPoll(run, REFRESH_MS);
+    return () => { alive = false; stop(); };
+  }, []);
+
+  // Cập nhật lạc quan (optimistic) ngay khi bấm — không đợi round-trip server —
+  // rồi vẫn gọi API thật; nếu API báo lỗi thì tải lại đúng dữ liệu từ server để
+  // không lệch (khác 401: setTicketStatus() đã tự forceReauth() sẵn).
+  function applyStatusChange(ticketId: string, status: TicketStatusValue, myEmail: string) {
+    const now = new Date().toISOString();
+    setStatusData((prev) => {
+      const next: TicketStatusData = { status: { ...(prev?.status || {}) }, notes: { ...(prev?.notes || {}) } };
+      next.status[ticketId] = {
+        status, updatedBy: myEmail, updatedAt: now,
+        doneBy: status === "done" ? myEmail : null,
+        doneAt: status === "done" ? now : null,
+      };
+      statusCache = next;
+      return next;
+    });
+    setTicketStatus(ticketId, status).then((ok) => { if (!ok) loadTicketStatus().then((d) => { statusCache = d; setStatusData(d); }); });
+  }
+
+  function applyNewNote(ticketId: string, author: string, note: string) {
+    setStatusData((prev) => {
+      const next: TicketStatusData = { status: { ...(prev?.status || {}) }, notes: { ...(prev?.notes || {}) } };
+      next.notes[ticketId] = [...(next.notes[ticketId] || []), { author, note, at: new Date().toISOString() }];
+      statusCache = next;
+      return next;
+    });
+  }
 
   const nq = normSearch(q);
   const filtered = useMemo(() => {
@@ -247,7 +300,22 @@ export function TicketVanTai() {
                 ) : (
                   <div className="ticket-list">
                     {shown.map((t) => (
-                      <TicketCard key={t.id} t={t} open={expanded.has(t.id)} onToggle={() => toggle(t.id)} />
+                      <TicketCard
+                        key={t.id}
+                        t={t}
+                        open={expanded.has(t.id)}
+                        onToggle={() => toggle(t.id)}
+                        statusRow={statusData?.status[t.id]}
+                        notes={statusData?.notes[t.id] || []}
+                        canManage={canManage}
+                        onChangeStatus={(s) => applyStatusChange(t.id, s, myEmail)}
+                        onAddNote={(note) => {
+                          applyNewNote(t.id, myEmail, note);
+                          addTicketNote(t.id, note).then((saved) => {
+                            if (!saved) loadTicketStatus().then((d) => { statusCache = d; setStatusData(d); });
+                          });
+                        }}
+                      />
                     ))}
                   </div>
                 )}
@@ -260,12 +328,40 @@ export function TicketVanTai() {
   );
 }
 
-function TicketCard({ t, open, onToggle }: { t: Ticket; open: boolean; onToggle: () => void }) {
+interface TicketCardProps {
+  t: Ticket;
+  open: boolean;
+  onToggle: () => void;
+  statusRow?: TicketStatusRow;
+  notes: TicketNote[];
+  canManage: boolean;
+  onChangeStatus: (s: TicketStatusValue) => void;
+  onAddNote: (note: string) => void;
+}
+
+/* 07/09/2026 (yêu cầu #4): trạng thái xử lý + nhật ký ghi chú, hiện NGAY dưới
+   thẻ ticket (không đợi mở rộng) để GSVT thấy trạng thái khi lướt danh sách;
+   phần chi tiết (đổi trạng thái + note) gói trong 1 khung riêng, tự mở rộng
+   nếu ticket ĐÃ có note (để không mất log cũ), thu gọn mặc định nếu chưa có gì. */
+function TicketCard({ t, open, onToggle, statusRow, notes, canManage, onChangeStatus, onAddNote }: TicketCardProps) {
   const meta = CATEGORY_META[t.category];
+  const status = statusRow?.status || "open";
+  const statusMeta = TICKET_STATUS_META[status];
+  const [noteOpen, setNoteOpen] = useState(notes.length > 0);
+  const [draft, setDraft] = useState("");
+
+  function submitNote() {
+    const v = draft.trim();
+    if (!v) return;
+    onAddNote(v);
+    setDraft("");
+  }
+
   return (
     <div className="ticket-card">
       <div className="ticket-head">
         <span className={"btbd-pill" + (meta.cls ? " " + meta.cls : "")}>{meta.icon} {meta.short}</span>
+        <span className={"btbd-pill" + (statusMeta.cls ? " " + statusMeta.cls : "")}>{statusMeta.label}</span>
         <span className="ticket-time">{fmtTime(t.time)}</span>
         <span className="ticket-group">{t.groupName}</span>
         {t.ticketCode && <span className="ticket-code">{t.ticketCode}</span>}
@@ -289,6 +385,60 @@ function TicketCard({ t, open, onToggle }: { t: Ticket; open: boolean; onToggle:
               <div className="ticket-reply-content">{r.content}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      <button className="ticket-reply-toggle" onClick={() => setNoteOpen((v) => !v)}>
+        {noteOpen ? "▲ Thu gọn xử lý & ghi chú" : `📝 Xử lý & ghi chú${notes.length ? ` (${notes.length})` : ""}`}
+      </button>
+      {noteOpen && (
+        <div className="ticket-notes">
+          {canManage && (
+            <div className="ticket-status-actions">
+              {(Object.keys(TICKET_STATUS_META) as TicketStatusValue[]).map((s) => (
+                <button
+                  key={s}
+                  className={"ticket-status-btn" + (status === s ? " active " + TICKET_STATUS_META[s].cls : "")}
+                  onClick={() => onChangeStatus(s)}
+                  disabled={status === s}
+                >
+                  {TICKET_STATUS_META[s].label}
+                </button>
+              ))}
+            </div>
+          )}
+          {statusRow?.updatedBy && (
+            <div className="ticket-status-meta">
+              Cập nhật gần nhất: <b>{statusRow.updatedBy}</b> · {fmtTime(new Date(statusRow.updatedAt))}
+              {statusRow.doneBy && status === "done" && <> · Đã xử lý bởi <b>{statusRow.doneBy}</b></>}
+            </div>
+          )}
+          {notes.length > 0 && (
+            <div className="ticket-note-log">
+              {notes.map((n, i) => (
+                <div className="ticket-note" key={i}>
+                  <div className="ticket-reply-head">
+                    <b>{n.author}</b>
+                    <span className="ticket-time">{fmtTime(new Date(n.at))}</span>
+                  </div>
+                  <div className="ticket-reply-content">{n.note}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {canManage ? (
+            <div className="ticket-note-form">
+              <textarea
+                placeholder="Ghi chú xử lý (vd: đã liên hệ tài xế, đang chờ xác nhận kho…)"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                rows={2}
+              />
+              <button className="re-btn" onClick={submitNote} disabled={!draft.trim()}>Lưu ghi chú</button>
+            </div>
+          ) : notes.length === 0 && !statusRow?.updatedBy ? (
+            <p className="lead" style={{ margin: 0 }}>Chưa có ghi chú xử lý.</p>
+          ) : null}
         </div>
       )}
     </div>

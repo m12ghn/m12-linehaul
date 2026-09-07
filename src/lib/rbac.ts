@@ -76,6 +76,13 @@ export const MODULES: ModuleDef[] = [
     { key: "matrix", label: "Ma trận Quyền" },
     { key: "roles", label: "Vai trò (Roles)" },
   ]},
+  // 07/09/2026: yêu cầu #4 — module MỚI cho phần trạng thái/note của Ticket Vận
+  // Tải (xem supabase/migrations/0007_ticket_trang_thai.sql + api/tickets.ts).
+  // Chỉ 1 sub "*" (chưa cần chia nhỏ) — action "view" giữ hành vi cũ (mọi vai
+  // trò đều xem tab được), action "edit" là quyền MỚI (đổi trạng thái/ghi note).
+  { key: "ticket-vt", label: "Ticket Vận Tải", icon: "message-square", subs: [
+    { key: "*", label: "Ticket vận tải (Telegram)" },
+  ]},
 ];
 
 export interface RoleDef { id: string; name: string; code: string; system?: boolean; locked?: boolean; }
@@ -109,9 +116,9 @@ const ACCESS: Record<string, "all" | string[]> = {
   admin: "all",
   deputy: MODULES.map((m) => m.key).filter((k) => k !== "phan-quyen"),
   manager: MODULES.map((m) => m.key).filter((k) => k !== "phan-quyen"),
-  leader: ["tong-quan", "lich-tai", "tlld-tuyen", "san-luong"],
-  staff: ["tong-quan", "lich-tai", "san-luong"],
-  cluster: ["tong-quan", "lich-tai", "tlld-tuyen", "tang-cuong", "san-luong", "ds-ncc", "plan-event", "sap-lich-tai", "cong-xuat"],
+  leader: ["tong-quan", "lich-tai", "tlld-tuyen", "san-luong", "ticket-vt"],
+  staff: ["tong-quan", "lich-tai", "san-luong", "ticket-vt"],
+  cluster: ["tong-quan", "lich-tai", "tlld-tuyen", "tang-cuong", "san-luong", "ds-ncc", "plan-event", "sap-lich-tai", "cong-xuat", "ticket-vt"],
 };
 
 export type SubPerm = Record<ActionKey, boolean>;
@@ -131,10 +138,17 @@ export function buildDefaultMatrix(roles: RoleDef[] = DEFAULT_ROLES): PermMatrix
         // Quản lý Cụm: ở Performance NCC chỉ xem HỒ SƠ NĂNG LỰC (sub "list"),
         // khoá "contact"/"gd" (PII người liên hệ/giám đốc) — đã chốt với Sếp.
         const subCan = can && !(r.id === "cluster" && mod.key === "ds-ncc" && sub.key !== "list");
+        // ticket-vt:edit (đổi trạng thái/ghi note ticket) là quyền MỚI, KHÔNG đi
+        // theo mặc định "quản lý trở lên" như các module khác — mặc định chỉ
+        // admin, Sếp tự bật cho vai trò phù hợp (vd "Giám sát vận tải") qua Ma
+        // trận Quyền (khớp default trong 0007_ticket_trang_thai.sql).
+        const editDefault = mod.key === "ticket-vt"
+          ? r.id === "admin"
+          : (r.id === "admin" || r.id === "deputy" || r.id === "manager" || r.id === "cluster");
         m[r.id][mod.key][sub.key] = {
           view: subCan,
           create: subCan && (r.id === "admin" || r.id === "deputy" || r.id === "manager"),
-          edit: subCan && (r.id === "admin" || r.id === "deputy" || r.id === "manager" || r.id === "cluster"),
+          edit: subCan && editDefault,
           delete: subCan && (r.id === "admin" || r.id === "deputy"),
           approve: subCan && (r.id === "admin" || r.id === "deputy" || r.id === "manager"),
           export: subCan && r.id !== "leader",
