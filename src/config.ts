@@ -283,3 +283,31 @@ export function csvSourcesByName(sheetName: string): string[] {
     `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`,
   ];
 }
+
+/** Như csvSourcesByName() nhưng cho 1 sheetId BẤT KỲ (không chỉ workbook chính SHEET_ID) — dùng cho
+ *  workbook BTBD (xem BTBD_SHEET_ID bên dưới), vốn là 1 Google Sheet hoàn toàn khác. */
+export function csvSourcesByNameFrom(sheetId: string, sheetName: string): string[] {
+  return [
+    apiV4SourceByName(sheetId, sheetName),
+    `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`,
+  ];
+}
+
+/**
+ * Workbook Google Sheet của module "Bảo Trì Bảo Dưỡng" (BTBD) — quản lý xe/bảo dưỡng, KHÔNG thuộc
+ * workbook Lịch Tải chính (SHEET_ID). 07/09/2026: Sếp quyết định (qua AskUserQuestion) bỏ hẳn app
+ * tách biệt cũ (repo GitHub linhnd1-code/btbd_dashboard — backend FastAPI + Postgres riêng, định
+ * deploy Render/Vercel) và gộp BTBD thẳng vào dashboard M12 này, đọc trực tiếp đúng Sheet mà backend
+ * cũ từng đọc (sheet_sync.py), y hệt kiểu Lịch Tải/TLLD hồi còn đọc Sheet trực tiếp (không qua DB
+ * riêng). Sheet thuộc Gmail cá nhân, chia sẻ "Anyone with the link can view" (theo ghi chú của repo
+ * cũ) nên đọc công khai được như các *_SHEET_ID khác ở trên.
+ * 3 tab đọc theo TÊN (không cần gid — sheet cũ không lưu gid, chỉ biết tên tab):
+ *  - "Data xe": danh sách xe (đăng ký/đăng kiểm/bảo hiểm/phù hiệu)
+ *  - "Data BTBD": trạng thái bảo dưỡng hiện tại theo ODO từng xe
+ *  - "Lịch sử Bảo dưỡng - sửa chữa": nhật ký từng lượt nhập/xuất xưởng
+ * Xem src/lib/btbd.ts — cột đọc theo VỊ TRÍ (không theo tên tiêu đề), bám đúng cách backend cũ đọc.
+ */
+export const BTBD_SHEET_ID = "1E_fYmNK3TIEMt3xz7JTwG5kmttz_lKbr8xtWRYTDQOY";
+export const BTBD_TAB_VEHICLES = "Data xe";
+export const BTBD_TAB_STATUS = "Data BTBD";
+export const BTBD_TAB_RECORDS = "Lịch sử Bảo dưỡng - sửa chữa";

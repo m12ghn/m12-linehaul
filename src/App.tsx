@@ -3,9 +3,11 @@ import { Header } from "./components/Header";
 import { NavBar } from "./components/NavBar";
 import { SheetTabs } from "./components/SheetTabs";
 import { TeamSidebar, type Team } from "./components/TeamSidebar";
-import { Btbd } from "./views/Btbd";
 import { Overview } from "./views/Overview"; // trang đầu -> nạp ngay
 // Các mục còn lại tách chunk, nạp khi mở (giảm JS ban đầu -> web nhẹ & mở nhanh hơn).
+// Btbd chuyển sang lazy 07/09/2026 khi từ trang trống thành 5 tab con thật (xem src/views/Btbd.tsx) —
+// trước đó import thẳng vì chỉ là 1 khối tĩnh nhỏ, giờ đủ lớn để tách chunk theo đúng quy ước chung.
+const Btbd = lazy(() => import("./views/Btbd").then((m) => ({ default: m.Btbd })));
 const LichTai = lazy(() => import("./views/LichTai").then((m) => ({ default: m.LichTai })));
 const Gsvt = lazy(() => import("./views/Gsvt").then((m) => ({ default: m.Gsvt })));
 const LoTrinh = lazy(() => import("./views/LoTrinh").then((m) => ({ default: m.LoTrinh })));
@@ -124,7 +126,9 @@ export default function App() {
       <TeamSidebar active={team} onChange={setTeam} />
       <div className="team-content">
       {team === "btbd" ? (
-        <Btbd />
+        <Suspense fallback={<div className="eb-reloading">⏳ Đang mở…</div>}>
+          <Btbd />
+        </Suspense>
       ) : (
     <>
       <Header user={user} onLogout={logout} />
