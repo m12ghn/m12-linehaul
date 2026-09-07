@@ -226,6 +226,9 @@ export const TOP_MENUS: { key: TopMenu; label: string }[] = [
   // MỞ LẠI: bỏ comment dòng dưới là menu "Lộ trình" hiện lại ngay.
   // { key: "lo-trinh", label: "Lộ trình" },
   { key: "tlld-tuyen", label: "TLLD Tuyến" },
+  // 07/09/2026: Ticket Vận Tải — log tin nhắn Telegram (30 group) phân loại thành ticket yêu cầu
+  // GSVT xử lý, xem src/lib/ticket.ts + src/views/TicketVanTai.tsx.
+  { key: "ticket-vt", label: "Ticket Vận Tải" },
   // 07/09/2026: Sếp yêu cầu tạm ẩn 5 mục dưới đây khỏi menu — toàn bộ code/view/dữ liệu vẫn giữ nguyên,
   // chỉ bỏ khỏi TOP_MENUS nên NavBar không hiện nút nữa (giống cách "Lộ trình" đã ẩn ở trên).
   // MỞ LẠI: bỏ comment các dòng bên dưới là menu hiện lại ngay, không cần sửa gì khác.
@@ -314,3 +317,19 @@ export const BTBD_SHEET_ID = "1E_fYmNK3TIEMt3xz7JTwG5kmttz_lKbr8xtWRYTDQOY";
 export const BTBD_TAB_VEHICLES = "Data xe";
 export const BTBD_TAB_STATUS = "Data BTBD";
 export const BTBD_TAB_RECORDS = "Lịch sử Bảo dưỡng - sửa chữa";
+
+/**
+ * Workbook Google Sheet "[Linehaul] Log Group Vùng Vận Tải" — log tin nhắn từ ~30 group Telegram
+ * (userbot ghi liên tục vào tab "log", KHÔNG thuộc job/repo của dashboard này — xem src/lib/ticket.ts).
+ * 07/09/2026: Sếp yêu cầu đưa lên dashboard dạng "ticket" (yêu cầu GSVT cần xử lý), đọc trực tiếp Sheet
+ * y hệt BTBD — quyết định qua AskUserQuestion:
+ *  - Phạm vi ticket: chỉ 10 nhóm "Phân loại (auto)" mang tính hành động (xem TICKET_CATEGORIES trong
+ *    src/lib/ticket.ts) — ẩn chat chung/media/xác nhận ngắn/thông báo-trạng-thái tự động (các nhóm này
+ *    gắn vào làm phản hồi/trạng thái của ticket gốc qua reply-chain, không phải ticket riêng).
+ *  - Phạm vi group: gộp cả 30 group (không lọc riêng group NCC).
+ *  - MVP: chỉ hiển thị + lọc/tìm — CHƯA có cột trạng thái Mở/Đã xử lý.
+ * Sheet ban đầu 401 (giới hạn quyền domain @ghn.vn) — Sếp đã đổi "Anyone with the link — Viewer" thành
+ * công lúc 07/09/2026, đọc gviz bình thường sau đó.
+ */
+export const TICKET_SHEET_ID = "10hyIxegHnTtRlxK4Fm5dRaRKJ_4AzIuNnbnRa1N8dUk";
+export const TICKET_GID = "0";

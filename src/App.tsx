@@ -19,6 +19,7 @@ const DsNcc = lazy(() => import("./views/DsNcc").then((m) => ({ default: m.DsNcc
 const PlanEvent = lazy(() => import("./views/PlanEvent").then((m) => ({ default: m.PlanEvent })));
 const SapLichTai = lazy(() => import("./views/SapLichTai").then((m) => ({ default: m.SapLichTai })));
 const PhanQuyen = lazy(() => import("./views/PhanQuyen").then((m) => ({ default: m.PhanQuyen })));
+const TicketVanTai = lazy(() => import("./views/TicketVanTai").then((m) => ({ default: m.TicketVanTai })));
 import { QABoard } from "./components/QABoard";
 import { EmailGate } from "./components/EmailGate";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -225,6 +226,7 @@ export default function App() {
           <SapLichTai mapMode={mapMode} setMapMode={setMapMode} />
         )}
         {topMenu === "phan-quyen" && <PhanQuyen />}
+        {topMenu === "ticket-vt" && <TicketVanTai />}
         </Suspense>
         </ErrorBoundary>
         )}

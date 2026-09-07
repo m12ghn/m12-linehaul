@@ -41,7 +41,8 @@ export type TopMenu =
   | "ds-ncc"
   | "plan-event"
   | "sap-lich-tai"
-  | "phan-quyen";
+  | "phan-quyen"
+  | "ticket-vt";
 
 /** Trạng thái tải dữ liệu của 1 vùng */
 export interface SheetData {
