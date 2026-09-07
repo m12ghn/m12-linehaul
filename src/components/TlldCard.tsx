@@ -59,7 +59,7 @@ export function TlldCard({ route, tlld }: { route: Route; tlld?: TlldRoute }) {
               {tlld!.series.map((s, i) => {
                 const we = isWeekendISO(s.date); // T7/CN -> dải nền + nhãn xanh nước biển
                 return (
-                <div className="tc-col" key={i} style={we ? { background: "rgba(0,161,154,0.16)", borderRadius: 5 } : undefined}>
+                <div className="tc-col" key={i} style={we ? { background: "rgba(255, 82, 0,0.16)", borderRadius: 5 } : undefined}>
                   <div className={"tc-pct " + (s.val == null ? "" : cls(s.val))}>
                     {s.val == null ? "" : Math.round(s.val * 100)}
                   </div>

@@ -87,7 +87,7 @@ function DayChart({ series }: { series: DayBar[] }) {
           const we = isWeekendISO(b.key); // T7/CN -> dải nền xanh nước biển
           return (
             <div key={b.key} title={`Ngày ${b.label}: ${b.total} lượt · ${b.coXe} có xe · ${b.khongXe} không xe${we ? " · CUỐI TUẦN" : ""}`}
-              style={{ flex: "1 0 auto", minWidth: 12, maxWidth: 26, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%", position: "relative", background: we ? "rgba(0,161,154,0.16)" : undefined, borderRadius: we ? 5 : undefined }}>
+              style={{ flex: "1 0 auto", minWidth: 12, maxWidth: 26, display: "flex", flexDirection: "column", justifyContent: "flex-end", height: "100%", position: "relative", background: we ? "rgba(255, 82, 0,0.16)" : undefined, borderRadius: we ? 5 : undefined }}>
               {isPeak && <div style={{ position: "absolute", top: -16, left: 0, right: 0, textAlign: "center", fontSize: 11.5, fontWeight: 800, color: "var(--orange)" }}>{b.total}</div>}
               <div style={{ borderRadius: "4px 4px 0 0", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: isPeak ? "0 0 0 2px var(--orange)" : undefined }}>
                 {other > 0 && <div style={{ height: h(other), background: "var(--muted)", opacity: 0.3 }} />}

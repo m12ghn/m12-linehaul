@@ -209,7 +209,7 @@ export function SanLuongDash({ sheetName, title, tlld }: { sheetName: string; ti
                     const we = gran === "day" && isWeekendISO(b.key); // T7/CN -> nhãn đỏ đậm
                     return (
                       <g key={b.key}>
-                        {we && <rect x={padL + i * slot} y={padT} width={slot} height={chartH} rx={4} fill="rgba(0,161,154,0.15)" />}
+                        {we && <rect x={padL + i * slot} y={padT} width={slot} height={chartH} rx={4} fill="rgba(255, 82, 0,0.15)" />}
                         <g className="sl-bar3d fx-rise" style={{ animationDelay: i * 0.09 + "s" }}>
                           {/* mặt bên (phải, tối) */}
                           <polygon points={`${x2},${y} ${x2 + d},${y - d} ${x2 + d},${y - d + h} ${x2},${y + h}`} fill={c.side} />

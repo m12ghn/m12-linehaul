@@ -80,7 +80,7 @@ function LongBars({ bars }: { bars: LB[] }) {
           const v = b.val ?? 0, y = yOf(v), h = Math.max(0, padT + ch - y);
           return (
             <g key={b.key}>
-              {b.weekend && <rect x={padL + i * slot} y={padT} width={slot} height={ch} fill="rgba(0,161,154,0.12)" />}
+              {b.weekend && <rect x={padL + i * slot} y={padT} width={slot} height={ch} fill="rgba(255, 82, 0,0.12)" />}
               {b.val != null && (
                 <rect x={x} y={y} width={bw} height={h} rx={2.5} fill={baseColor(b.val)}>
                   <title>{`${b.label}${b.sub ? " (" + b.sub + ")" : ""}: ${pct(b.val)} · ${b.n} tuyến${b.running ? " · đang chạy" : ""}`}</title>
@@ -375,7 +375,7 @@ export function TlldReport({
               const x2 = x + barW;
               return (
                 <g key={p.key}>
-                  {p.weekend && <rect x={padL + i * slot} y={padT} width={slot} height={chartH} rx={4} fill="rgba(0,161,154,0.15)" />}
+                  {p.weekend && <rect x={padL + i * slot} y={padT} width={slot} height={chartH} rx={4} fill="rgba(255, 82, 0,0.15)" />}
                   <g className="sl-bar3d fx-pop" style={{ animationDelay: i * 0.08 + "s" }}>
                     <polygon points={`${x2},${y} ${x2 + d},${y - d} ${x2 + d},${y - d + h} ${x2},${y + h}`} fill={shade(base, -0.28)} />
                     <polygon points={`${x},${y} ${x + d},${y - d} ${x2 + d},${y - d} ${x2},${y}`} fill={shade(base, 0.3)} />

@@ -47,16 +47,19 @@
 }
 .gf-brand-title {
   margin-top: 22px;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 800;
-  letter-spacing: -.015em;
+  letter-spacing: -.01em;
   color: #fff;
+  text-align: center;
+  max-width: 380px;
 }
 .gf-brand-sub {
   margin-top: 9px;
   font-size: 15px;
   font-weight: 500;
   color: var(--gf-muted);
+  text-align: center;
 }
 
 /* ---------- CỘT PHẢI: form ---------- */

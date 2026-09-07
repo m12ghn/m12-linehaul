@@ -21,8 +21,10 @@ export function LoginScreen({ onSubmit, onGhnLogin, version = "v1.76.3" }: Props
     <div className="gf-login">
       <div className="gf-brand">
         <img className="gf-logo" src="/favicon-v6.png" alt="GHN" />
-        <div className="gf-brand-title">GHN·GateFlow</div>
-        <div className="gf-brand-sub">Điều phối xe tải · Sorting center</div>
+        {/* 07/09/2026: Sếp yêu cầu đổi lại đúng tên app thật (khớp <h1> ở Header.tsx
+            của dashboard chính) thay vì tên tạm "GHN·GateFlow" lúc phác thảo. */}
+        <div className="gf-brand-title">TRANG QUẢN LÝ LINEHAUL M12</div>
+        <div className="gf-brand-sub">M12SC · LINEHAUL — Điều phối xe tải · Sorting center</div>
       </div>
 
       <div className="gf-panel">

@@ -443,7 +443,7 @@ const CSS_SCOPED = `
 /* Dải nền đánh dấu ngày: T7/CN là xám trung tính (đậm dần), EVENT là teal.
    Dùng alpha nên hiện đúng trên cả nền sáng lẫn nền đen. EVENT là một LOẠI
    ngày chứ không phải cảnh báo, nên không dùng màu cam status. */
-.bd-wrap { position: relative; --bd-sat: rgba(128, 128, 128, 0.18); --bd-sun: rgba(128, 128, 128, 0.34); --bd-event: rgba(0, 161, 154, 0.20); }
+.bd-wrap { position: relative; --bd-sat: rgba(128, 128, 128, 0.18); --bd-sun: rgba(128, 128, 128, 0.34); --bd-event: rgba(255, 82, 0, 0.20); }
 .bd-sec-h { font-size: 16px; font-weight: 800; color: var(--ink); margin: 18px 0 8px; }
 .bd-sec-sub { font-weight: 500; color: var(--muted); font-size: 13px; }
 .bd-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }

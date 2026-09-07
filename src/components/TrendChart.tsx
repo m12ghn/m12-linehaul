@@ -39,7 +39,7 @@ export function TrendChart({ series, showRateLabels }: { series: DayBar[]; showR
         {/* dải nền cuối tuần */}
         {series.map((b, i) =>
           isWeekendISO(b.key) ? (
-            <rect key={"we" + i} x={x(i) - stepX / 2} y={padTop - 4} width={stepX} height={PH + 8} fill="rgba(0,161,154,0.07)" />
+            <rect key={"we" + i} x={x(i) - stepX / 2} y={padTop - 4} width={stepX} height={PH + 8} fill="rgba(255, 82, 0,0.07)" />
           ) : null
         )}
         {/* lưới + trục TRÁI (lượt) */}

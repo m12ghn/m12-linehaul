@@ -100,7 +100,7 @@ export function NccPerformance({ lay, giao, date }: { lay: TCRoute[]; giao: TCRo
           </thead>
           <tbody>
             {ghn && (
-              <tr style={{ background: "rgba(0,161,154,0.06)" }}>
+              <tr style={{ background: "rgba(255, 82, 0,0.06)" }}>
                 <td style={{ fontWeight: 700 }}>🏠 GHN (xe nhà)</td>
                 <td className="num">{ghn.book}</td>
                 <td className="num" style={{ color: "var(--muted)" }}>—</td>

@@ -16,16 +16,13 @@ export function Header({ user, onLogout }: { user?: AppUser | null; onLogout?: (
   return (
     <header className="topbar">
       <div className="logo-wrap">
-        {/* Quy tắc brand: nền sáng dùng bản chữ đen + mũi tên teal, nền tối dùng bản trắng.
-            LƯU Ý: bộ logo brand gửi kèm chỉ có 3 file và CẢ 3 đều là bản chữ trắng
-            (primary / white / on-teal giống nhau ở phần chữ) — không có bản cho nền
-            sáng. `ghn-logo-on-light.png` là bản tự đổi chữ trắng thành đen, giữ nguyên
-            mũi tên teal. Khi nào brand gửi file gốc thì thay lại đúng file đó. */}
-        <img
-          className="logo-img"
-          src={theme === "dark" ? "/ghn-logo-white.png" : "/ghn-logo-on-light.png"}
-          alt="Giao Hàng Nặng"
-        />
+        {/* 07/09/2026: đổi sang logo GHN màu cam theo yêu cầu Sếp — dùng lại đúng
+            file favicon-v6.png có sẵn trong repo (256×256, nền trong suốt, đúng
+            y hệt icon cam trong ảnh Sếp gửi, chất lượng cao hơn hẳn tự cắt từ
+            ảnh chụp màn hình). Icon tự có màu (cam + chữ trắng lồng bên trong),
+            không cần đổi theo theme sáng/tối như bộ logo chữ đen/trắng cũ nữa —
+            1 file dùng chung cho cả 2 chế độ. */}
+        <img className="logo-img" src="/favicon-v6.png" alt="GHN" />
       </div>
       <div className="title-block">
         <div className="crumb">

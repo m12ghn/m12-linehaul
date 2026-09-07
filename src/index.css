@@ -5,15 +5,29 @@
    bản đồ Leaflet, status bar.
 
    ⚠ LỚP ÁNH XẠ — ĐỌC TRƯỚC KHI SỬA MÀU
-   Bảng màu chính thức nằm ở styles/ghn-tokens.css (teal · đen · trắng).
-   Dashboard này viết trước khi có brand book nên khắp nơi còn dùng tên biến
-   cũ (--orange, --blue, --violet...). Thay vì sửa hàng nghìn chỗ dùng, ta giữ
-   nguyên TÊN biến và trỏ chúng vào token GHN. Tên biến giờ chỉ còn là nhãn
-   lịch sử, không còn nói lên màu thật nữa:
+   07/09/2026 (tối): Sếp chốt đổi bộ màu chính thức từ đen/teal (bàn giao brand
+   cũ, xem styles/ghn-tokens.css — file đó giữ NGUYÊN, không sửa giá trị, để
+   còn đối chiếu lại nếu cần) sang CAM/XANH/TRẮNG theo logo GHN·GiaoHangNhanh
+   mới. Cam #ff5200 + xanh #006fae đo trực tiếp từ ảnh logo Sếp gửi (không bịa).
+   Cơ chế: định nghĩa LẠI (override, không sửa file gốc) đúng các biến sơ cấp
+   --teal-50..900 (nay = thang CAM) + thêm thang --blue2-50..900 (XANH, brand
+   cũ không có), rồi trỏ toàn bộ lớp ngữ nghĩa (--accent, --text-link,
+   --chart-*, --orange/--blue lịch sử...) vào 2 thang mới này. Vì CSS custom
+   property tra theo tầng ở THỜI ĐIỂM DÙNG chứ không phải lúc khai báo, mọi chỗ
+   trong ghn-tokens.css lỡ viết var(--teal-500) tự động ăn theo giá trị mới ở
+   đây — KHÔNG cần sửa từng dòng. Ngoại lệ: vài chỗ ghn-tokens.css viết THẲNG
+   rgba() (không qua var) — các chỗ đó override tay riêng bên dưới.
 
-       --orange / --violet / --blue  →  teal (màu tín hiệu duy nhất)
-       --green / --red / --amber     →  status success / danger / warning
-       --ink / --muted / --line      →  dải trung tính GHN
+   Dashboard viết trước khi có brand book nên khắp nơi còn dùng tên biến cũ
+   (--orange, --blue, --violet...). Tên biến giờ chỉ còn là nhãn lịch sử,
+   không còn nói lên "màu cam thật" nữa — --orange chính là màu cam brand thật
+   nay đã trùng nhau, còn --violet vẫn chỉ là bí danh cũ trỏ vào --accent
+   (không phải màu tím riêng).
+
+       --orange / --violet  →  thang cam mới (điểm nhấn chính, nút, tab active)
+       --blue                →  thang xanh mới (nhãn hệ thống, link, phụ)
+       --green / --red / --amber  →  status success / danger / warning
+       --ink / --muted / --line   →  dải trung tính GHN (không đổi)
 
    Code MỚI hãy dùng thẳng token GHN (--accent, --text-body, --border-subtle,
    --chart-1..8), đừng dùng lại mấy tên cũ này.
@@ -21,11 +35,81 @@
    Khối này khai báo cho cả :root lẫn .ghn-dark, vì token GHN đổi giá trị theo
    ngữ cảnh — không khai báo lại thì bật chế độ tối sẽ không ăn.
    ============================================================ */
+:root {
+  /* Thang CAM mới — GHI ĐÈ đúng 10 biến --teal-* của ghn-tokens.css (không sửa
+     file gốc, chỉ override ở đây). Đo từ ảnh logo: #ff5200 = 500 = neo brand.
+     Cùng cấu trúc L% với thang teal cũ (900 tối nhất → 50 nhạt nhất, 2 bậc
+     nhạt nhất hạ saturation để đỡ chói) nên mọi chỗ dùng var(--teal-NNN) sẵn
+     có trong ghn-tokens.css/index.css tự động ăn màu cam, không cần sửa tay. */
+  --teal-900: #2e0f00;
+  --teal-800: #622000;
+  --teal-700: #963000;
+  --teal-600: #cb4100;
+  --teal-500: #ff5200;   /* = neo brand cam, đo trực tiếp từ logo */
+  --teal-400: #ff712e;
+  --teal-300: #ff905c;
+  --teal-200: #ffaf8a;
+  --teal-100: #eed6cb;
+  --teal-50:  #f8f0ec;
+
+  /* Thang XANH mới — brand cũ không có thang xanh riêng (chỉ có 1 màu tín
+     hiệu là teal), nên đây là biến HOÀN TOÀN MỚI, không đụng gì ghn-tokens.css.
+     Đo từ ảnh logo: #006fae = 500 = neo xanh brand. */
+  --blue2-900: #001d2e;
+  --blue2-800: #00324e;
+  --blue2-700: #00466e;
+  --blue2-600: #005b8e;
+  --blue2-500: #006fae;   /* = neo brand xanh, đo trực tiếp từ logo */
+  --blue2-400: #009ef7;
+  --blue2-300: #41baff;
+  --blue2-200: #8ad5ff;
+  --blue2-100: #cbe1ee;
+  --blue2-50:  #ecf4f8;
+
+  /* 2 chỗ ghn-tokens.css viết thẳng rgba() (không qua var --teal-500) nên
+     override tay riêng, không tự ăn theo thang cam ở trên được. */
+  --warning-soft: #fdf7e2;      /* thay #fbf1e2 cũ, ăn khớp --color-warning mới */
+
+  /* Cảnh báo (--color-warning) trước đây #d9820a khá gần với cam brand mới
+     (#ff5200, cách nhau ~15° hue) — dễ lẫn giữa "đang chọn/điểm nhấn" và
+     "cảnh báo" trong chip nhỏ. Ngả hẳn sang vàng/hổ phách (H45) để tách xa cả
+     cam brand lẫn đỏ lỗi (--color-danger, H~4). success/danger giữ nguyên. */
+  --color-warning: #daa60b;
+
+  /* Bộ màu biểu đồ MỚI — brand giờ có 2 màu tín hiệu (cam + xanh) thay vì 1,
+     nên xen kẽ cam/xanh/xám thay vì chỉ 1 dải như bản teal cũ, để phân biệt
+     nhiều series rõ hơn. LƯU Ý: chưa đo ΔE/kiểm mù màu bài bản như bản teal
+     gốc (comment cũ trong ghn-tokens.css ghi rõ đã đo) — đây chỉ chọn theo mắt
+     thường (cam/xanh nói chung vẫn tách biệt tốt với hầu hết dạng mù màu),
+     Sếp/brand nên kiểm lại nếu dùng cho báo cáo ra ngoài. */
+  --chart-1: var(--teal-500);   /* cam brand */
+  --chart-2: var(--blue2-700);  /* xanh đậm */
+  --chart-3: var(--teal-200);   /* cam nhạt — tương phản thấp trên nền trắng, kèm nhãn số */
+  --chart-4: var(--gray-700);
+  --chart-5: var(--blue2-300);  /* xanh nhạt — tương phản thấp trên nền trắng, kèm nhãn số */
+  --chart-6: var(--blue2-600);
+}
+.ghn-dark {
+  /* 2 chỗ ghn-tokens.css viết thẳng rgba() cho nền tối, override tay riêng. */
+  --accent-soft: rgba(255, 82, 0, .14);      /* thay rgba(255, 82, 0,.14) cũ */
+  --warning-soft: rgba(218, 166, 11, .16);   /* thay rgba(217,130,10,.16) cũ */
+
+  /* Bộ màu biểu đồ trên nền đen — ưu tiên bậc SÁNG của mỗi thang (bậc tối
+     600-900 gần như biến mất trên nền đen), cùng logic xen kẽ cam/xanh/xám. */
+  --chart-1: var(--teal-300);
+  --chart-2: var(--gray-500);
+  --chart-3: var(--blue2-200);
+  --chart-4: var(--teal-500);
+  --chart-5: var(--gray-300);
+  --chart-6: var(--blue2-400);
+}
 :root, .ghn-dark {
-  /* cam cũ → teal: nút chính, tab đang chọn, điểm nhấn dữ liệu */
+  /* cam cũ → thang cam brand thật: nút chính, tab đang chọn, điểm nhấn dữ liệu */
   --orange: var(--accent); --orange-2: var(--accent-hover); --orange-soft: var(--accent-soft);
-  /* xanh dương cũ → teal đậm: nhãn hệ thống, link */
-  --blue: var(--teal-600); --blue-2: var(--teal-500); --blue-soft: var(--accent-soft);
+  /* xanh dương cũ → thang xanh brand thật (KHÔNG còn là teal đậm nữa): nhãn hệ thống, link.
+     Bậc mặc định (nền sáng) — nền tối override bậc sáng hơn ở khối .ghn-dark riêng bên dưới,
+     giống cách ghn-tokens.css tự đổi --accent sang bậc nhạt hơn cho nền đen. */
+  --blue: var(--blue2-600); --blue-2: var(--blue2-500); --blue-soft: var(--blue2-50);
   /* 3 màu status giữ đúng nghĩa cũ, chỉ đổi sang mã brand */
   --green: var(--color-success); --green-2: var(--color-success); --green-soft: var(--success-soft);
   --red: var(--color-danger); --red-2: var(--color-danger); --red-soft: var(--danger-soft);
@@ -35,6 +119,15 @@
   --line: var(--border-subtle); --line-2: var(--border-subtle);
   --bg: var(--surface-page); --white: var(--surface-card);
   --gauge-track: var(--surface-sunken);
+}
+.ghn-dark {
+  /* Nền tối: --blue-soft sáng (blue2-50) sẽ chói trên nền đen, giống lý do
+     ghn-tokens.css tự đổi accent-soft/status-soft ở trên sang lớp phủ mờ
+     thay vì màu pastel — làm tương tự cho blue-soft ở đây. */
+  --blue-soft: rgba(0, 111, 174, .18);
+  /* --blue bậc 600 (đậm) đọc hơi chìm trên nền đen — lên bậc nhạt hơn để rõ
+     chữ, cùng logic --accent tự sáng hơn ở nền tối (ghn-tokens.css). */
+  --blue: var(--blue2-400); --blue-2: var(--blue2-300);
 }
 :root {
   /* Bo góc: brand quy định 0–6px. Đợt này chỉ đổi màu theo yêu cầu, nên giữ
@@ -74,7 +167,7 @@ header.topbar { background: var(--white); padding: 14px 26px; display: flex; ali
 .title-block .sub { font-size: 14px; color: var(--muted); }
 .title-block .sub b { color: var(--orange); }
 .title-block .sub .live { color: var(--green); font-weight: 700; }
-.feedback-jump { flex: none; align-self: center; display: inline-flex; align-items: center; gap: 8px; background: var(--orange); color: var(--text-onaccent); border: none; border-radius: 24px; padding: 10px 18px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgba(0,161,154, .3); transition: .15s; }
+.feedback-jump { flex: none; align-self: center; display: inline-flex; align-items: center; gap: 8px; background: var(--orange); color: var(--text-onaccent); border: none; border-radius: 24px; padding: 10px 18px; font-size: 15px; font-weight: 700; cursor: pointer; box-shadow: 0 4px 14px rgba(255, 82, 0, .3); transition: .15s; }
 .feedback-jump:hover { background: var(--accent-press); transform: translateY(-1px); }
 .visit-badge { flex: none; align-self: center; display: inline-flex; align-items: center; gap: 6px; background: var(--orange-soft); color: var(--orange); border: 1px solid var(--teal-100); border-radius: 22px; padding: 7px 13px; font-size: 14.5px; font-weight: 700; white-space: nowrap; }
 @media (max-width: 600px) { .visit-badge { font-size: 13.5px; padding: 6px 10px; } }
@@ -92,10 +185,10 @@ nav.tabs::-webkit-scrollbar-track { background: var(--teal-100); border-radius: 
 nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6px; }
 .tab { border: none; background: none; cursor: pointer; padding: 14px 16px; font-size: 15px; font-weight: 800; color: var(--red); white-space: nowrap; display: flex; align-items: center; gap: 8px; border-bottom: 3px solid transparent; margin-bottom: -3px; transition: color .15s, transform .16s cubic-bezier(.2,.8,.2,1), box-shadow .16s, background .16s; text-transform: uppercase; border-radius: 10px 10px 0 0; transform-origin: bottom center; will-change: transform; }
 .tab .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border-subtle); transition: .15s; }
-.tab:hover { color: var(--accent-press); transform: translateY(-3px) scale(1.04); background: linear-gradient(180deg, var(--accent-soft), var(--surface-card)); box-shadow: 0 6px 14px -6px rgba(0,161,154,.45); }
+.tab:hover { color: var(--accent-press); transform: translateY(-3px) scale(1.04); background: linear-gradient(180deg, var(--accent-soft), var(--surface-card)); box-shadow: 0 6px 14px -6px rgba(255, 82, 0,.45); }
 .tab:active { transform: translateY(-1px) scale(1.0); }
 .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 800; }
-.tab.active .dot { background: var(--blue); box-shadow: 0 0 0 3px rgba(0,161,154, .18); }
+.tab.active .dot { background: var(--blue); box-shadow: 0 0 0 3px rgba(255, 82, 0, .18); }
 .menu-ic { font-size: 14.5px; line-height: 1; margin-left: -3px; display: inline-block; will-change: transform; transform-origin: center; }
 /* Bổ sung động cho Tổng Quan (🏠) & Plan Event (✈️) — bộ icon chính nằm ngay dưới */
 .ic-tong-quan  { animation: ic-pulse 3s ease-in-out infinite; }
@@ -132,7 +225,7 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .subnav-inner::-webkit-scrollbar { display: none; }
 .region-btn { border: 1.5px solid var(--line-2); background: var(--white); cursor: pointer; padding: 8px 16px; font-size: 14.5px; font-weight: 600; color: var(--text-muted); white-space: nowrap; border-radius: 22px; transition: .15s; display: flex; align-items: center; gap: 7px; }
 .region-btn:hover { border-color: var(--orange-2); color: var(--orange); }
-.region-btn.active { background: var(--orange); border-color: var(--orange); color: var(--text-onaccent); box-shadow: 0 3px 10px rgba(0,161,154, .28); }
+.region-btn.active { background: var(--orange); border-color: var(--orange); color: var(--text-onaccent); box-shadow: 0 3px 10px rgba(255, 82, 0, .28); }
 .region-btn .cnt { font-size: 12.5px; opacity: .8; font-weight: 700; }
 
 /* ===== NAV cấp 3 (loại tuyến) ===== */
@@ -173,7 +266,7 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .search-box { flex: 1; min-width: 240px; position: relative; }
 .search-box svg { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--muted); }
 .search-box input { width: 100%; padding: 12px 16px 12px 46px; border: 1.5px solid var(--line-2); border-radius: 30px; font-size: 15.5px; background: var(--white); outline: none; transition: .15s; }
-.search-box input:focus { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(0,161,154, .1); }
+.search-box input:focus { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(255, 82, 0, .1); }
 .res-count { font-size: 14.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
 .res-count b { color: var(--orange); }
 .refresh-btn { border: 1.5px solid var(--line-2); background: var(--white); color: var(--text-muted); border-radius: 24px; padding: 10px 18px; font-size: 14.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: .15s; white-space: nowrap; }
@@ -189,7 +282,7 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .tlld-lookup-fields { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; flex: 1; }
 .tlld-lookup-f { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); font-weight: 600; }
 .tlld-lookup-f input { padding: 9px 12px; border: 1.5px solid var(--line-2); border-radius: 10px; font-size: 14px; background: var(--white); outline: none; transition: .15s; font-family: inherit; }
-.tlld-lookup-f input:focus { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(0,161,154, .1); }
+.tlld-lookup-f input:focus { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(255, 82, 0, .1); }
 .tlld-lookup-f input[type="text"] { min-width: 150px; }
 .tlld-lookup-results-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .tlld-lookup-results .tc-grid tbody tr { cursor: pointer; }
@@ -538,7 +631,7 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 /* ===== SUB-TABS (Sắp Mới / Ghép Tải) ===== */
 .sub-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
 .sub-tabs button { border: 1.5px solid var(--line-2); background: var(--white); color: var(--text-muted); border-radius: 22px; padding: 8px 18px; font-size: 15px; font-weight: 700; cursor: pointer; }
-.sub-tabs button.active { background: var(--orange); border-color: var(--orange); color: var(--text-onaccent); box-shadow: 0 3px 10px rgba(0,161,154, .28); }
+.sub-tabs button.active { background: var(--orange); border-color: var(--orange); color: var(--text-onaccent); box-shadow: 0 3px 10px rgba(255, 82, 0, .28); }
 .sl-subtabs { flex-wrap: wrap; }
 .sl-subtabs button { padding: 7px 14px; font-size: 14px; }
 /* Màn chặn quản trị (Trợ lý Lịch Tải) */
@@ -703,14 +796,14 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .da-row .pl-in { flex: 1; }
 .da-row .pl-calc { white-space: nowrap; }
 /* ===== TỔNG QUAN ===== */
-.ov-copilot { position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px; background: linear-gradient(120deg, var(--accent-soft) 0%, var(--accent-soft) 38%, var(--surface-card) 72%); border: 1px solid var(--teal-100); border-left: 4px solid var(--orange); box-shadow: 0 6px 22px -12px rgba(0,161,154,.35); }
+.ov-copilot { position: relative; overflow: hidden; display: flex; align-items: center; gap: 16px; background: linear-gradient(120deg, var(--accent-soft) 0%, var(--accent-soft) 38%, var(--surface-card) 72%); border: 1px solid var(--teal-100); border-left: 4px solid var(--orange); box-shadow: 0 6px 22px -12px rgba(255, 82, 0,.35); }
 /* vầng sáng trang trí ở góc phải -> hero "có chiều sâu", đại diện Dash */
-.ov-copilot-glow { position: absolute; right: -60px; top: -70px; width: 230px; height: 230px; border-radius: 50%; background: radial-gradient(circle, rgba(0,161,154,.16), rgba(0,161,154,0) 70%); pointer-events: none; }
-.ov-brandtag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; letter-spacing: .06em; color: var(--orange); background: rgba(0,161,154,.10); border: 1px solid rgba(0,161,154,.20); padding: 3px 10px; border-radius: 999px; margin-bottom: 7px; text-transform: uppercase; }
+.ov-copilot-glow { position: absolute; right: -60px; top: -70px; width: 230px; height: 230px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 82, 0,.16), rgba(255, 82, 0,0) 70%); pointer-events: none; }
+.ov-brandtag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; letter-spacing: .06em; color: var(--orange); background: rgba(255, 82, 0,.10); border: 1px solid rgba(255, 82, 0,.20); padding: 3px 10px; border-radius: 999px; margin-bottom: 7px; text-transform: uppercase; }
 .ov-brandtag-dot { opacity: .5; }
 .ov-copilot .ov-greet-body { flex: 1; min-width: 0; }
 .ov-insight { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; margin-top: 10px; background: var(--surface-card); border: 1px solid var(--teal-100); border-radius: 12px; padding: 10px 12px; cursor: pointer; transition: .14s; }
-.ov-insight:hover { border-color: var(--orange); box-shadow: 0 4px 12px -6px rgba(0,161,154,.4); }
+.ov-insight:hover { border-color: var(--orange); box-shadow: 0 4px 12px -6px rgba(255, 82, 0,.4); }
 .ov-insight-ic { font-size: 20px; flex: 0 0 auto; }
 .ov-insight-txt { font-size: 14.5px; color: var(--ink); line-height: 1.45; flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .ov-insight-txt b { color: var(--orange); }
@@ -806,7 +899,7 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 /* Cảnh báo sản lượng (N-1 / N / N+1 / N+2) */
 .va-days { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
 .va-day { position: relative; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px 9px; text-align: center; }
-.va-day.now { background: linear-gradient(135deg, var(--accent-soft), var(--surface-card)); border-color: var(--orange); box-shadow: 0 4px 14px rgba(0,161,154,.12); }
+.va-day.now { background: linear-gradient(135deg, var(--accent-soft), var(--surface-card)); border-color: var(--orange); box-shadow: 0 4px 14px rgba(255, 82, 0,.12); }
 .va-lb { font-size: 12px; font-weight: 700; color: var(--muted); }
 .va-day.now .va-lb { color: var(--orange); }
 .va-vol { font-size: 20px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1.15; margin-top: 2px; }
@@ -1051,7 +1144,7 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .eg-hint { text-align: left; font-size: 14px; color: var(--blue); margin-top: 8px; }
 .eg-err { text-align: left; font-size: 14px; color: var(--red); font-weight: 700; margin-top: 8px; }
 .eg-btn { width: 100%; margin-top: 16px; background: var(--orange); color: var(--text-onaccent); border: none; border-radius: 11px; padding: 12px; font-size: 16px; font-weight: 800; cursor: pointer; transition: .15s; }
-.eg-btn:hover:not(:disabled) { box-shadow: 0 6px 16px -6px rgba(0,161,154,.6); }
+.eg-btn:hover:not(:disabled) { box-shadow: 0 6px 16px -6px rgba(255, 82, 0,.6); }
 .eg-btn:disabled { opacity: .5; cursor: not-allowed; }
 .eg-note { font-size: 12.5px; color: var(--muted); margin-top: 12px; }
 .eg-google { display: flex; justify-content: center; margin: 4px 0 2px; min-height: 40px; }
@@ -1204,7 +1297,7 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
    để không ai lướt qua mà không nhận ra còn chi tiết ẩn bên trong. */
 .collapsible { margin-top: 12px; }
 .collapsible-h { display: flex; align-items: center; gap: 10px; width: 100%; background: var(--orange-soft); border: 1.5px solid var(--teal-100); border-radius: 10px; padding: 12px 16px; font-size: 15px; font-weight: 700; color: var(--ink); cursor: pointer; text-align: left; transition: background .15s, box-shadow .15s, border-color .15s; }
-.collapsible-h:hover { background: var(--teal-100); border-color: var(--orange); box-shadow: 0 2px 10px rgba(0,161,154, .16); }
+.collapsible-h:hover { background: var(--teal-100); border-color: var(--orange); box-shadow: 0 2px 10px rgba(255, 82, 0, .16); }
 .collapsible.open > .collapsible-h { border-radius: 10px 10px 0 0; background: var(--bg); border-color: var(--line); }
 .collapsible.open > .collapsible-h:hover { background: var(--surface-sunken); border-color: var(--line-2); box-shadow: none; }
 .collapsible-arrow { font-size: 15px; font-weight: 800; color: var(--orange); width: 12px; flex: none; }
