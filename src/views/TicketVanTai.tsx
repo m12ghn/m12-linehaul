@@ -280,6 +280,9 @@ export function TicketVanTai() {
   const hasFilter = !!(q || category || group || statusFilter || dateFrom || dateTo);
   const shown = hasFilter ? filtered : filtered.slice(0, TICKET_DEFAULT_LIMIT);
 
+  // KPI đầu trang ("Loại yêu cầu nhiều nhất"/"Nhóm nhiều ticket nhất") CỐ Ý tính trên TOÀN BỘ
+  // ticket, không theo phạm vi đang chọn (kể cả ngày) — giữ đúng thiết kế gốc: bấm vào 2 thẻ
+  // này để "nhảy" sang đúng top toàn cục, không phải top trong ngày đang lọc.
   const catCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of data?.tickets || []) m.set(t.category, (m.get(t.category) || 0) + 1);
@@ -290,7 +293,6 @@ export function TicketVanTai() {
     for (const [k, v] of catCounts) if (!best || v > best[1]) best = [k, v];
     return best;
   }, [catCounts]);
-  // Đếm theo nhóm (toàn bộ, KHÔNG phụ thuộc loại đang chọn) — dùng cho cả KPI lẫn cột 1 sidebar.
   const groupCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of data?.tickets || []) m.set(t.groupName, (m.get(t.groupName) || 0) + 1);
@@ -301,30 +303,53 @@ export function TicketVanTai() {
     for (const [k, v] of groupCounts) if (!best || v > best[1]) best = [k, v];
     return best;
   }, [groupCounts]);
+
+  // 07/09/2026 (khuya, lần 4) — Sếp báo "có lọc ngày nhưng số bên trái (sidebar) chưa nhảy
+  // theo": khác với KPI đầu trang ở trên (cố ý toàn cục), 3 cột sidebar (Nhóm/Loại/Trạng thái)
+  // vốn đã "khoan sâu dần" theo nhau (Nhóm -> Loại -> Trạng thái) — lọc NGÀY giờ cũng phải nằm
+  // trong chuỗi khoan đó, ở tầng NGOÀI CÙNG (trước cả Nhóm), để mọi số đếm trong 3 cột luôn
+  // khớp với khoảng ngày đang chọn. `dateScoped` = tickets sau khi lọc ngày (CHƯA lọc
+  // nhóm/loại/trạng thái/tìm kiếm) — nguồn dùng chung cho cả 3 map đếm bên dưới.
+  const dateScoped = useMemo(() => {
+    if (!data) return [];
+    if (!dateFrom && !dateTo) return data.tickets;
+    return data.tickets.filter((t) => {
+      if (dateFrom && ymd(t.time) < dateFrom) return false;
+      if (dateTo && ymd(t.time) > dateTo) return false;
+      return true;
+    });
+  }, [data, dateFrom, dateTo]);
+
+  // Đếm theo nhóm TRONG PHẠM VI NGÀY đang chọn — dùng cho cột 1 sidebar (cnt + thứ tự hiển thị).
+  const groupCountsScoped = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of dateScoped) m.set(t.groupName, (m.get(t.groupName) || 0) + 1);
+    return m;
+  }, [dateScoped]);
   // 07/09/2026: cột 1 sidebar trước đây liệt kê nhóm theo A-Z (data.groupNames đã sort
   // alphabet ở lib/ticket.ts) — Sếp yêu cầu đổi sang xếp theo số lượng ticket giảm dần
   // (giống cột 2 "Loại yêu cầu" đã làm vậy từ đầu). Sort riêng ở component này (không
   // đụng data.groupNames gốc) vì đây chỉ là thứ tự HIỂN THỊ.
   const groupNamesByCount = useMemo(() => {
-    return [...(data?.groupNames || [])].sort((a, b) => (groupCounts.get(b) || 0) - (groupCounts.get(a) || 0));
-  }, [data, groupCounts]);
+    return [...(data?.groupNames || [])].sort((a, b) => (groupCountsScoped.get(b) || 0) - (groupCountsScoped.get(a) || 0));
+  }, [data, groupCountsScoped]);
 
-  // Đếm loại yêu cầu CHỈ trong phạm vi nhóm đang chọn ở cột 1 (rỗng = tất cả nhóm) — dùng cho cột 2 sidebar.
+  // Đếm loại yêu cầu trong phạm vi NGÀY + nhóm đang chọn ở cột 1 (rỗng = tất cả nhóm) — dùng cho cột 2 sidebar.
   const catCountsInScope = useMemo(() => {
     const m = new Map<string, number>();
-    for (const t of data?.tickets || []) {
+    for (const t of dateScoped) {
       if (group && t.groupName !== group) continue;
       m.set(t.category, (m.get(t.category) || 0) + 1);
     }
     return m;
-  }, [data, group]);
+  }, [dateScoped, group]);
   // Chỉ liệt kê các loại thực sự CÓ MẶT trong phạm vi đang chọn, xếp theo số lượng giảm dần.
   const categoriesInScope = useMemo(() => {
     return TICKET_CATEGORIES.filter((c) => (catCountsInScope.get(c) || 0) > 0).sort(
       (a, b) => (catCountsInScope.get(b) || 0) - (catCountsInScope.get(a) || 0)
     );
   }, [catCountsInScope]);
-  const scopeTotal = group ? groupCounts.get(group) || 0 : data?.tickets.length || 0;
+  const scopeTotal = group ? groupCountsScoped.get(group) || 0 : dateScoped.length;
 
   // 07/09/2026 (khuya), yêu cầu #4: lọc DANH SÁCH hiển thị ở cột "Nhóm Telegram" theo ô tìm
   // (không đụng gì tới lựa chọn `group` đang chọn, chỉ thu hẹp các nút hiện ra) — "Tất cả
@@ -335,18 +360,18 @@ export function TicketVanTai() {
     return groupNamesByCount.filter((g) => normSearch(g).includes(nq2));
   }, [groupNamesByCount, groupQuery]);
 
-  // 07/09/2026 (khuya), yêu cầu #3: đếm theo Trạng thái, phạm vi = nhóm + loại ĐANG chọn (đúng
-  // kiểu "khoan sâu dần" Nhóm -> Loại -> Trạng thái, giống cách cột 2 đã scope theo cột 1).
+  // 07/09/2026 (khuya), yêu cầu #3: đếm theo Trạng thái, phạm vi = ngày + nhóm + loại ĐANG chọn
+  // (đúng kiểu "khoan sâu dần" Ngày -> Nhóm -> Loại -> Trạng thái).
   const statusCountsInScope = useMemo(() => {
     const m = new Map<StatusFilterValue, number>();
-    for (const t of data?.tickets || []) {
+    for (const t of dateScoped) {
       if (group && t.groupName !== group) continue;
       if (category && t.category !== category) continue;
       const eff = effectiveStatus(t, statusData?.status[t.id]);
       m.set(eff, (m.get(eff) || 0) + 1);
     }
     return m;
-  }, [data, group, category, statusData]);
+  }, [dateScoped, group, category, statusData]);
   const statusScopeTotalOpenish = (["open", "in_progress", "done"] as StatusFilterValue[])
     .reduce((sum, s) => sum + (statusCountsInScope.get(s) || 0), 0);
 
@@ -429,11 +454,11 @@ export function TicketVanTai() {
                     onChange={(e) => setGroupQuery(e.target.value)}
                   />
                   <button className={"ticket-side-item" + (group === "" ? " active" : "")} onClick={() => pickGroup("")}>
-                    <span>Tất cả nhóm</span><span className="cnt">{data.tickets.length}</span>
+                    <span>Tất cả nhóm</span><span className="cnt">{dateScoped.length}</span>
                   </button>
                   {groupNamesFiltered.map((g) => (
                     <button key={g} className={"ticket-side-item" + (group === g ? " active" : "")} onClick={() => pickGroup(g)}>
-                      <span>{g}</span><span className="cnt">{groupCounts.get(g) || 0}</span>
+                      <span>{g}</span><span className="cnt">{groupCountsScoped.get(g) || 0}</span>
                     </button>
                   ))}
                   {groupNamesFiltered.length === 0 && <p className="lead" style={{ margin: "4px 8px", fontSize: 12.5 }}>Không có nhóm nào khớp.</p>}
