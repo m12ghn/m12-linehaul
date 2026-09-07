@@ -1923,6 +1923,32 @@ footer .dot-sep { margin: 0 6px; opacity: .5; }
 .ticket-replies { margin-top: 8px; padding-left: 12px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
 .ticket-reply-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
 .ticket-reply-content { font-size: 13.5px; color: var(--ink-2); white-space: pre-wrap; word-break: break-word; }
+
+/* Sidebar 2 tầng (Nhóm Telegram -> Loại yêu cầu trong nhóm đó), thêm 07/09/2026 tối theo yêu cầu
+   Sếp, thay cho 2 dropdown lọc cũ — mượn lại đúng phong cách .nvt-split/.nvt-item (xem trên). */
+.ticket-layout { display: grid; grid-template-columns: 240px 1fr; gap: 12px; align-items: start; }
+.ticket-side { display: flex; flex-direction: column; gap: 12px; }
+.ticket-side-section { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px; max-height: 320px; overflow-y: auto; }
+.ticket-side-title {
+  font-size: 12px; font-weight: 700; color: var(--muted); padding: 4px 8px 8px;
+  position: sticky; top: 0; background: var(--white);
+}
+.ticket-side-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+  text-align: left; border: none; background: transparent; border-radius: 9px; padding: 7px 9px;
+  font-size: 13.5px; color: var(--ink-2); cursor: pointer; transition: background .12s;
+}
+.ticket-side-item span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ticket-side-item:hover { background: var(--bg); }
+.ticket-side-item.active { background: var(--orange-soft); color: var(--ink); font-weight: 700; box-shadow: inset 3px 0 0 var(--orange); }
+.ticket-side-item .cnt { flex: 0 0 auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; }
+.ticket-side-item.active .cnt { color: var(--orange); }
+.ticket-main { min-width: 0; }
+@media (max-width: 900px) {
+  .ticket-layout { grid-template-columns: 1fr; }
+  .ticket-side { flex-direction: row; flex-wrap: wrap; }
+  .ticket-side-section { flex: 1 1 260px; max-height: 220px; }
+}
 .re-new {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
   width: 100%; padding: 12px; margin-top: 8px;

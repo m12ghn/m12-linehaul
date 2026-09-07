@@ -7,6 +7,17 @@
    MVP (Sếp chốt qua AskUserQuestion): chỉ hiển thị + lọc/tìm kiếm (tìm nội
    dung/người gửi, lọc theo loại yêu cầu, lọc theo nhóm Telegram) — CHƯA có
    cột trạng thái Mở/Đã xử lý, để dành đợt sau nếu cần.
+
+   07/09/2026 (tối) — Sếp yêu cầu đổi 2 dropdown lọc (loại/nhóm) thành sidebar
+   trái 2 tầng, thay vì hỏi lại (việc UI/UX rõ ràng, không đụng logic dữ liệu):
+     Cột 1 "Nhóm Telegram" — chọn 1 nhóm (hoặc "Tất cả nhóm").
+     Cột 2 "Loại yêu cầu" — chỉ liệt kê các loại CÓ MẶT trong nhóm đang chọn ở
+       cột 1 (đúng nghĩa "loại ticket trong nhóm telegram đó" Sếp mô tả) — đổi
+       nhóm ở cột 1 sẽ tự reset lựa chọn cột 2 về "Tất cả loại" vì danh sách
+       loại có thể đã đổi hẳn. Đếm ở cột 1 KHÔNG phụ thuộc cột 2 (cột 1 luôn
+       là tổng số ticket của từng nhóm, không đổi theo loại đang chọn).
+   Ô tìm kiếm + danh sách ticket (thẻ, bấm mở rộng xem phản hồi) chuyển sang
+   cột phải, giữ nguyên logic lọc/giới hạn hiển thị mặc định như trước.
    ============================================================ */
 import { useEffect, useMemo, useState } from "react";
 import { loadTickets, TICKET_CATEGORIES, type Ticket, type TicketData, type TicketCategory } from "../lib/ticket";
@@ -91,6 +102,7 @@ export function TicketVanTai() {
     for (const [k, v] of catCounts) if (!best || v > best[1]) best = [k, v];
     return best;
   }, [catCounts]);
+  // Đếm theo nhóm (toàn bộ, KHÔNG phụ thuộc loại đang chọn) — dùng cho cả KPI lẫn cột 1 sidebar.
   const groupCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const t of data?.tickets || []) m.set(t.groupName, (m.get(t.groupName) || 0) + 1);
@@ -101,6 +113,29 @@ export function TicketVanTai() {
     for (const [k, v] of groupCounts) if (!best || v > best[1]) best = [k, v];
     return best;
   }, [groupCounts]);
+
+  // Đếm loại yêu cầu CHỈ trong phạm vi nhóm đang chọn ở cột 1 (rỗng = tất cả nhóm) — dùng cho cột 2 sidebar.
+  const catCountsInScope = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const t of data?.tickets || []) {
+      if (group && t.groupName !== group) continue;
+      m.set(t.category, (m.get(t.category) || 0) + 1);
+    }
+    return m;
+  }, [data, group]);
+  // Chỉ liệt kê các loại thực sự CÓ MẶT trong phạm vi đang chọn, xếp theo số lượng giảm dần.
+  const categoriesInScope = useMemo(() => {
+    return TICKET_CATEGORIES.filter((c) => (catCountsInScope.get(c) || 0) > 0).sort(
+      (a, b) => (catCountsInScope.get(b) || 0) - (catCountsInScope.get(a) || 0)
+    );
+  }, [catCountsInScope]);
+  const scopeTotal = group ? groupCounts.get(group) || 0 : data?.tickets.length || 0;
+
+  // Chọn nhóm ở cột 1 -> luôn reset loại ở cột 2 (danh sách loại có thể đã đổi hẳn).
+  function pickGroup(g: string) {
+    setGroup(g);
+    setCategory("");
+  }
 
   function toggle(id: string) {
     setExpanded((prev) => {
@@ -144,36 +179,53 @@ export function TicketVanTai() {
           </div>
 
           <div className="section-card" style={{ marginTop: 16 }}>
-            <div className="toolbar" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-              <div className="search-box" style={{ maxWidth: 320 }}>
-                <input placeholder="Tìm nội dung/người gửi…" value={q} onChange={(e) => setQ(e.target.value)} />
+            <div className="ticket-layout">
+              <div className="ticket-side">
+                <div className="ticket-side-section">
+                  <div className="ticket-side-title">Nhóm Telegram</div>
+                  <button className={"ticket-side-item" + (group === "" ? " active" : "")} onClick={() => pickGroup("")}>
+                    <span>Tất cả nhóm</span><span className="cnt">{data.tickets.length}</span>
+                  </button>
+                  {data.groupNames.map((g) => (
+                    <button key={g} className={"ticket-side-item" + (group === g ? " active" : "")} onClick={() => pickGroup(g)}>
+                      <span>{g}</span><span className="cnt">{groupCounts.get(g) || 0}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="ticket-side-section">
+                  <div className="ticket-side-title">Loại yêu cầu{group ? ` — trong "${group}"` : ""}</div>
+                  <button className={"ticket-side-item" + (category === "" ? " active" : "")} onClick={() => setCategory("")}>
+                    <span>Tất cả loại</span><span className="cnt">{scopeTotal}</span>
+                  </button>
+                  {categoriesInScope.map((c) => (
+                    <button key={c} className={"ticket-side-item" + (category === c ? " active" : "")} onClick={() => setCategory(c)}>
+                      <span>{CATEGORY_META[c].icon} {CATEGORY_META[c].short}</span><span className="cnt">{catCountsInScope.get(c) || 0}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <select value={category} onChange={(e) => setCategory(e.target.value)} className="re-btn" style={{ cursor: "pointer" }}>
-                <option value="">Tất cả loại yêu cầu</option>
-                {TICKET_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{CATEGORY_META[c].short} ({catCounts.get(c) || 0})</option>
-                ))}
-              </select>
-              <select value={group} onChange={(e) => setGroup(e.target.value)} className="re-btn" style={{ cursor: "pointer" }}>
-                <option value="">Tất cả nhóm</option>
-                {data.groupNames.map((g) => (
-                  <option key={g} value={g}>{g} ({groupCounts.get(g) || 0})</option>
-                ))}
-              </select>
-              <span className="lead" style={{ alignSelf: "center" }}>
-                {hasFilter ? `${shown.length} / ${filtered.length} ticket khớp` : `Đang hiện ${shown.length} ticket mới nhất / ${filtered.length} tổng — lọc để xem hết`}
-              </span>
-            </div>
 
-            {shown.length === 0 ? (
-              <p className="lead">Không có ticket nào khớp bộ lọc.</p>
-            ) : (
-              <div className="ticket-list">
-                {shown.map((t) => (
-                  <TicketCard key={t.id} t={t} open={expanded.has(t.id)} onToggle={() => toggle(t.id)} />
-                ))}
+              <div className="ticket-main">
+                <div className="toolbar" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+                  <div className="search-box" style={{ maxWidth: 320 }}>
+                    <input placeholder="Tìm nội dung/người gửi…" value={q} onChange={(e) => setQ(e.target.value)} />
+                  </div>
+                  <span className="lead" style={{ alignSelf: "center" }}>
+                    {hasFilter ? `${shown.length} / ${filtered.length} ticket khớp` : `Đang hiện ${shown.length} ticket mới nhất / ${filtered.length} tổng — lọc để xem hết`}
+                  </span>
+                </div>
+
+                {shown.length === 0 ? (
+                  <p className="lead">Không có ticket nào khớp bộ lọc.</p>
+                ) : (
+                  <div className="ticket-list">
+                    {shown.map((t) => (
+                      <TicketCard key={t.id} t={t} open={expanded.has(t.id)} onToggle={() => toggle(t.id)} />
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </>
       )}
