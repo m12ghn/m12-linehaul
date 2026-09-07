@@ -226,12 +226,15 @@ export const TOP_MENUS: { key: TopMenu; label: string }[] = [
   // MỞ LẠI: bỏ comment dòng dưới là menu "Lộ trình" hiện lại ngay.
   // { key: "lo-trinh", label: "Lộ trình" },
   { key: "tlld-tuyen", label: "TLLD Tuyến" },
-  { key: "tang-cuong", label: "Vùng HCM" },
-  { key: "san-luong", label: "Sản Lượng" },
-  { key: "ds-ncc", label: "Performance NCC" },
-  { key: "plan-event", label: "Plan Event" },
+  // 07/09/2026: Sếp yêu cầu tạm ẩn 5 mục dưới đây khỏi menu — toàn bộ code/view/dữ liệu vẫn giữ nguyên,
+  // chỉ bỏ khỏi TOP_MENUS nên NavBar không hiện nút nữa (giống cách "Lộ trình" đã ẩn ở trên).
+  // MỞ LẠI: bỏ comment các dòng bên dưới là menu hiện lại ngay, không cần sửa gì khác.
+  // { key: "tang-cuong", label: "Vùng HCM" },
+  // { key: "san-luong", label: "Sản Lượng" },
+  // { key: "ds-ncc", label: "Performance NCC" },
+  // { key: "plan-event", label: "Plan Event" },
   { key: "sap-lich-tai", label: "Trợ lý Lịch Tải" },
-  { key: "phan-quyen", label: "Phân quyền" },
+  // { key: "phan-quyen", label: "Phân quyền" },
 ];
 
 /**
