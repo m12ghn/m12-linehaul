@@ -18,8 +18,15 @@
        là tổng số ticket của từng nhóm, không đổi theo loại đang chọn).
    Ô tìm kiếm + danh sách ticket (thẻ, bấm mở rộng xem phản hồi) chuyển sang
    cột phải, giữ nguyên logic lọc/giới hạn hiển thị mặc định như trước.
+
+   07/09/2026 (khuya, lần 3) — thêm bộ lọc theo NGÀY tin nhắn (t.time): nút thả
+   xuống trong toolbar cột phải, có sẵn vài mốc nhanh (Hôm nay/Hôm qua/7 ngày
+   gần nhất/30 ngày gần nhất/Tháng này) + 2 ô ngày tuỳ chỉnh (Từ/Đến). Áp dụng
+   ở TẦNG CUỐI của `filtered` (như ô tìm kiếm `q`) — KHÔNG đụng vào các bộ đếm
+   sidebar (Nhóm/Loại/Trạng thái đang scope theo nhau, không theo ngày), đúng
+   tinh thần "tìm kiếm không đổi số đếm" đã có sẵn từ trước.
    ============================================================ */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadTickets, TICKET_CATEGORIES, type Ticket, type TicketData, type TicketCategory } from "../lib/ticket";
 import { startPoll } from "../lib/poll";
 import { REFRESH_MS } from "../config";
@@ -65,6 +72,110 @@ function fmtTime(d: Date): string {
   return `${p2(d.getDate())}/${p2(d.getMonth() + 1)} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 }
 
+/* 07/09/2026 (khuya, lần 3) — helper cho bộ lọc theo ngày. So sánh theo NGÀY LỊCH (giờ máy
+   người dùng, giống input[type=date]) chứ không phải mốc UTC — khớp đúng cảm giác "ngày" của
+   người xem, và khớp với giá trị input[type=date] trả về (chuỗi yyyy-mm-dd theo local time). */
+function ymd(d: Date): string {
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function fmtDmyShort(s: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+  return m ? `${m[3]}/${m[2]}` : "";
+}
+const DATE_PRESETS: { key: string; label: string; range: () => [string, string] }[] = [
+  { key: "today", label: "Hôm nay", range: () => { const t = new Date(); return [ymd(t), ymd(t)]; } },
+  { key: "yesterday", label: "Hôm qua", range: () => { const t = addDays(new Date(), -1); return [ymd(t), ymd(t)]; } },
+  { key: "7d", label: "7 ngày gần nhất", range: () => { const t = new Date(); return [ymd(addDays(t, -6)), ymd(t)]; } },
+  { key: "30d", label: "30 ngày gần nhất", range: () => { const t = new Date(); return [ymd(addDays(t, -29)), ymd(t)]; } },
+  { key: "thisMonth", label: "Tháng này", range: () => { const t = new Date(); return [ymd(new Date(t.getFullYear(), t.getMonth(), 1)), ymd(t)]; } },
+];
+
+/** Nút thả xuống lọc theo khoảng ngày (tin nhắn) — mốc nhanh + 2 ô ngày tuỳ chỉnh. */
+function DateRangeFilter({
+  dateFrom, dateTo, onApply,
+}: {
+  dateFrom: string;
+  dateTo: string;
+  onApply: (from: string, to: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [from, setFrom] = useState(dateFrom);
+  const [to, setTo] = useState(dateTo);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // Đồng bộ ô nháp mỗi lần MỞ ra (không đồng bộ liên tục khi đang gõ, để tránh giật lại giá
+  // trị đang chọn dở nếu cha re-render vì lý do khác trong lúc khung đang mở).
+  useEffect(() => { if (open) { setFrom(dateFrom); setTo(dateTo); } }, [open, dateFrom, dateTo]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  const activePresetKey = useMemo(() => {
+    if (!dateFrom && !dateTo) return "";
+    for (const p of DATE_PRESETS) {
+      const [f, t] = p.range();
+      if (f === dateFrom && t === dateTo) return p.key;
+    }
+    return "";
+  }, [dateFrom, dateTo]);
+
+  const label = !dateFrom && !dateTo
+    ? "📅 Khoảng thời gian"
+    : activePresetKey
+    ? `📅 ${DATE_PRESETS.find((p) => p.key === activePresetKey)!.label}`
+    : `📅 ${fmtDmyShort(dateFrom) || "…"} – ${fmtDmyShort(dateTo) || "…"}`;
+
+  return (
+    <div className="ticket-date-filter" ref={boxRef}>
+      <button type="button" className={"re-btn" + (dateFrom || dateTo ? " active" : "")} onClick={() => setOpen((v) => !v)}>
+        {label}
+      </button>
+      {open && (
+        <div className="ticket-date-pop">
+          <div className="ticket-date-presets">
+            {DATE_PRESETS.map((p) => (
+              <button
+                key={p.key}
+                type="button"
+                className={activePresetKey === p.key ? "active" : ""}
+                onClick={() => { const [f, t] = p.range(); onApply(f, t); setOpen(false); }}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="ticket-date-custom">
+            <label className="ticket-date-f">
+              <span>Từ ngày</span>
+              <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+            </label>
+            <label className="ticket-date-f">
+              <span>Đến ngày</span>
+              <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+            </label>
+          </div>
+          <div className="ticket-date-actions">
+            <button type="button" className="clear" onClick={() => { onApply("", ""); setOpen(false); }}>✕ Bỏ lọc ngày</button>
+            <button type="button" className="done" onClick={() => { onApply(from, to); setOpen(false); }}>Áp dụng</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ~2.700 ticket trong tổng log — giới hạn số dòng HIỂN THỊ khi chưa lọc gì (không cắt dữ liệu đã tải),
 // giống đúng cách NhatKySuaChua (BTBD) đang làm.
 const TICKET_DEFAULT_LIMIT = 200;
@@ -79,6 +190,8 @@ export function TicketVanTai() {
   const [group, setGroup] = useState<string>("");
   const [groupQuery, setGroupQuery] = useState(""); // 07/09 khuya, yêu cầu #4: ô tìm trong cột Nhóm Telegram
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(""); // yêu cầu #3
+  const [dateFrom, setDateFrom] = useState(""); // 07/09 khuya, lần 3: lọc theo ngày tin nhắn
+  const [dateTo, setDateTo] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [statusData, setStatusData] = useState<TicketStatusData | null>(statusCache);
   const { canDo } = useMyRole();
@@ -153,6 +266,9 @@ export function TicketVanTai() {
       if (category && t.category !== category) return false;
       if (group && t.groupName !== group) return false;
       if (nq && !normSearch(t.content + " " + t.sender).includes(nq)) return false;
+      // Lọc theo ngày TIN NHẮN (t.time), so theo ngày lịch local — xem ymd() phía trên.
+      if (dateFrom && ymd(t.time) < dateFrom) return false;
+      if (dateTo && ymd(t.time) > dateTo) return false;
       const eff = effectiveStatus(t, statusData?.status[t.id]);
       // Mặc định (chưa bấm lọc trạng thái) ẩn ticket đã "closed" tự động — bấm rõ
       // "Đóng" ở cột Trạng thái mới xem lại (yêu cầu #2+#3, 07/09 khuya).
@@ -160,8 +276,8 @@ export function TicketVanTai() {
       else if (eff === "closed") return false;
       return true;
     });
-  }, [data, category, group, nq, statusFilter, statusData]);
-  const hasFilter = !!(q || category || group || statusFilter);
+  }, [data, category, group, nq, statusFilter, statusData, dateFrom, dateTo]);
+  const hasFilter = !!(q || category || group || statusFilter || dateFrom || dateTo);
   const shown = hasFilter ? filtered : filtered.slice(0, TICKET_DEFAULT_LIMIT);
 
   const catCounts = useMemo(() => {
@@ -357,6 +473,7 @@ export function TicketVanTai() {
                   <div className="search-box" style={{ maxWidth: 320 }}>
                     <input placeholder="Tìm nội dung/người gửi…" value={q} onChange={(e) => setQ(e.target.value)} />
                   </div>
+                  <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); }} />
                   <span className="lead" style={{ alignSelf: "center" }}>
                     {hasFilter ? `${shown.length} / ${filtered.length} ticket khớp` : `Đang hiện ${shown.length} ticket mới nhất / ${filtered.length} tổng — lọc để xem hết`}
                   </span>
