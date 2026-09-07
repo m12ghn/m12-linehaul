@@ -7,7 +7,7 @@
    MVP đợt 1 (Sếp chốt qua AskUserQuestion, xem src/lib/btbd.ts): 5 tab con —
    Tổng quan, Danh sách xe, Hạn giấy tờ, Lịch bảo dưỡng, Nhật ký sửa chữa.
    Đăng nhập DÙNG CHUNG với dashboard M12 (Sếp chốt) — trang này đã nằm sau
-   EmailGate ở App.tsx như mọi trang khác, không cần thêm gate riêng.
+   màn đăng nhập (LoginScreen) ở App.tsx như mọi trang khác, không cần thêm gate riêng.
    ============================================================ */
 import { useEffect, useMemo, useState } from "react";
 import {

@@ -1128,39 +1128,10 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .pe-note { font-size: 14px; color: var(--text-muted); background: var(--orange-soft); border-left: 4px solid var(--orange); margin-top: 12px; }
 @media (max-width: 720px) { .pe-kpis { grid-template-columns: repeat(2, 1fr); } .pe-code { min-width: 0; } }
 
-/* ===== CỔNG ĐĂNG NHẬP EMAIL ===== */
-.emailgate { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: linear-gradient(135deg, var(--orange-soft), var(--surface-sunken)); }
-.eg-card { width: 100%; max-width: 400px; background: var(--white); border-radius: 18px; padding: 30px 26px; box-shadow: 0 18px 50px -18px rgba(0,0,0,.28); text-align: center; }
-.eg-logo { height: 72px; object-fit: contain; margin-bottom: 14px; }
-.eg-pw-wrap { position: relative; }
-.eg-pw { padding-right: 42px !important; }
-.eg-eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 18px; line-height: 1; padding: 4px; opacity: .8; }
-.eg-eye:hover { opacity: 1; }
-.eg-forgot { display: block; width: 100%; text-align: center; margin-top: 12px; }
-.eg-title { font-size: 19px; font-weight: 800; color: var(--ink); }
-.eg-sub { font-size: 14.5px; color: var(--muted); margin: 6px 0 18px; line-height: 1.5; }
-.eg-lb { display: block; text-align: left; font-size: 13.5px; font-weight: 700; color: var(--muted); margin: 10px 0 4px; }
-.eg-in { width: 100%; }
-.eg-hint { text-align: left; font-size: 14px; color: var(--blue); margin-top: 8px; }
-.eg-err { text-align: left; font-size: 14px; color: var(--red); font-weight: 700; margin-top: 8px; }
-.eg-btn { width: 100%; margin-top: 16px; background: var(--orange); color: var(--text-onaccent); border: none; border-radius: 11px; padding: 12px; font-size: 16px; font-weight: 800; cursor: pointer; transition: .15s; }
-.eg-btn:hover:not(:disabled) { box-shadow: 0 6px 16px -6px rgba(255, 82, 0,.6); }
-.eg-btn:disabled { opacity: .5; cursor: not-allowed; }
-.eg-note { font-size: 12.5px; color: var(--muted); margin-top: 12px; }
-.eg-google { display: flex; justify-content: center; margin: 4px 0 2px; min-height: 40px; }
-.eg-sep { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; color: var(--muted); font-size: 13px; }
-.eg-sep::before, .eg-sep::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-.eg-linkbtn { background: none; border: none; color: var(--accent); font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 6px; }
-.eg-linkbtn:hover { text-decoration: underline; }
+/* 07/09/2026: bỏ cổng đăng nhập chỉ-cần-email (EmailGate + .emailgate/.eg-*) —
+   thay bằng màn GHN·GateFlow bắt buộc mật khẩu (src/components/LoginScreen.tsx +
+   src/styles/login.css, CSS đóng gói riêng prefix .gf-, không nằm trong file này). */
 .acc-tag { margin-left: 6px; font-size: 12.5px; opacity: .8; }
-.eg-otp { text-align: center; font-size: 24px; font-weight: 800; letter-spacing: 10px; font-variant-numeric: tabular-nums; }
-.eg-otp-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-.eg-msg { font-size: 14px; color: var(--color-success); background: var(--success-soft); border: 1px solid var(--success-soft); border-radius: 8px; padding: 8px 10px; margin-top: 10px; }
-.eg-tabs { display: flex; gap: 6px; background: var(--surface-sunken); border-radius: 10px; padding: 4px; margin: 4px 0 6px; }
-.eg-tab { flex: 1; border: none; background: transparent; padding: 8px 10px; border-radius: 7px; font-size: 15px; font-weight: 700; color: var(--text-muted); cursor: pointer; }
-.eg-tab.on { background: var(--surface-card); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
-.eg-subtitle { font-size: 13.5px; color: var(--muted); text-align: center; margin-bottom: 10px; }
-.eg-hint { font-size: 12.5px; color: var(--muted); margin: 4px 0 2px; }
 .foot-user { display: inline-block; margin-bottom: 4px; }
 .foot-logout { border: none; background: none; color: var(--blue); cursor: pointer; font-size: inherit; text-decoration: underline; padding: 0; }
 

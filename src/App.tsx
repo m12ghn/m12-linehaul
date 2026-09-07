@@ -21,7 +21,7 @@ const SapLichTai = lazy(() => import("./views/SapLichTai").then((m) => ({ defaul
 const PhanQuyen = lazy(() => import("./views/PhanQuyen").then((m) => ({ default: m.PhanQuyen })));
 const TicketVanTai = lazy(() => import("./views/TicketVanTai").then((m) => ({ default: m.TicketVanTai })));
 import { QABoard } from "./components/QABoard";
-import { EmailGate } from "./components/EmailGate";
+import { LoginScreen } from "./components/LoginScreen";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { useLichTai } from "./lib/db/useLichTai";
 import { initAutoReload } from "./lib/autoReload";
@@ -35,7 +35,7 @@ import { VISIBLE_SHEETS, TOP_MENUS, GEO_REFRESH_MS } from "./config";
 import type { TopMenu } from "./types";
 
 export default function App() {
-  const { user, emailLogin, logout } = useUser();
+  const { user, login, logout } = useUser();
   // Team đang xem — 03/09/2026: Sếp quản lý thêm team "Bảo Trì Bảo Dưỡng" (BTBD) ngoài
   // Linehaul M12 (toàn bộ nội dung hiện tại). Sidebar ngoài cùng (TeamSidebar) chuyển
   // qua lại, KHÔNG đụng gì vào NavBar ngang/topMenu hiện có — xem render bên dưới.
@@ -119,8 +119,10 @@ export default function App() {
     });
   }, []);
 
-  // Cổng email (lớp ngoài) — chưa đăng nhập thì chưa vào được Dashboard.
-  if (!user) return <EmailGate onEmailLogin={emailLogin} />;
+  // Cổng đăng nhập (lớp ngoài) — chưa đăng nhập thì chưa vào được Dashboard.
+  // 07/09/2026: đổi từ EmailGate (chỉ cần email) sang màn GHN·GateFlow bắt buộc
+  // mật khẩu — mỗi tài khoản đặt/đổi mật khẩu ở mục Phân quyền → Tài khoản nhân sự.
+  if (!user) return <LoginScreen onLogin={login} />;
 
   return (
     <div className="team-shell">

@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from "react";
+import React from "react";
 import ReactDOM from "react-dom/client";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
@@ -10,21 +10,12 @@ import { applyTheme, initialTheme } from "./lib/useTheme";
 // một nhịp rồi mới chuyển sang nền đen.
 applyTheme(initialTheme());
 
-// Xem thử màn đăng nhập GHN·GateFlow: mở /?login (tách chunk riêng -> không
-// nặng thêm bundle chính, không đổi luồng đăng nhập hiện tại).
-const LoginScreen = lazy(() => import("./components/LoginScreen").then((m) => ({ default: m.LoginScreen })));
-const loginPreview = new URLSearchParams(window.location.search).has("login");
-
+// 07/09/2026: bỏ cờ preview "/?login" — màn GHN·GateFlow (LoginScreen) giờ là
+// luồng đăng nhập THẬT, App.tsx tự hiện màn này khi chưa đăng nhập.
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      {loginPreview ? (
-        <Suspense fallback={null}>
-          <LoginScreen />
-        </Suspense>
-      ) : (
-        <App />
-      )}
+      <App />
     </ErrorBoundary>
   </React.StrictMode>
 );
