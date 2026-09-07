@@ -247,6 +247,9 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .kpi .lbl { font-size: 12.5px; font-weight: 700; color: var(--muted); letter-spacing: .7px; text-transform: uppercase; }
 .kpi .val { font-size: 30px; font-weight: 800; line-height: 1.1; margin: 6px 0 3px; }
 .kpi.green .val { color: var(--green); } .kpi .val.orange { color: var(--orange); }
+.kpi-click { cursor: pointer; transition: box-shadow .15s, border-color .15s; }
+.kpi-click:hover { box-shadow: 0 6px 16px -8px rgba(0,0,0,.18); border-color: var(--border-accent); }
+.kpi-click:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .kpi .note { font-size: 13px; color: var(--muted); }
 .kpi .badge { display: inline-block; background: var(--green-soft); color: var(--green); font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 12px; margin-top: 6px; }
 .low-chip { border: 1px solid var(--danger-soft); background: var(--red-soft); color: var(--red); border-radius: 8px; padding: 3px 8px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; }

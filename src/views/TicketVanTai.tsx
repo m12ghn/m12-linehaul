@@ -113,6 +113,13 @@ export function TicketVanTai() {
     for (const [k, v] of groupCounts) if (!best || v > best[1]) best = [k, v];
     return best;
   }, [groupCounts]);
+  // 07/09/2026: cột 1 sidebar trước đây liệt kê nhóm theo A-Z (data.groupNames đã sort
+  // alphabet ở lib/ticket.ts) — Sếp yêu cầu đổi sang xếp theo số lượng ticket giảm dần
+  // (giống cột 2 "Loại yêu cầu" đã làm vậy từ đầu). Sort riêng ở component này (không
+  // đụng data.groupNames gốc) vì đây chỉ là thứ tự HIỂN THỊ.
+  const groupNamesByCount = useMemo(() => {
+    return [...(data?.groupNames || [])].sort((a, b) => (groupCounts.get(b) || 0) - (groupCounts.get(a) || 0));
+  }, [data, groupCounts]);
 
   // Đếm loại yêu cầu CHỈ trong phạm vi nhóm đang chọn ở cột 1 (rỗng = tất cả nhóm) — dùng cho cột 2 sidebar.
   const catCountsInScope = useMemo(() => {
@@ -173,8 +180,28 @@ export function TicketVanTai() {
         <>
           <div className="kpi-row" style={{ marginTop: 16 }}>
             <div className="kpi"><div className="lbl">Tổng ticket</div><div className="val">{data.tickets.length.toLocaleString("vi-VN")}</div><div className="note">Trong {data.groupNames.length} nhóm Telegram</div></div>
-            <div className="kpi ink"><div className="lbl">Loại yêu cầu nhiều nhất</div><div className="val" style={{ fontSize: 16 }}>{topCategory ? CATEGORY_META[topCategory[0] as TicketCategory]?.short || topCategory[0] : "—"}</div><div className="note">{topCategory ? `${topCategory[1].toLocaleString("vi-VN")} ticket` : "—"}</div></div>
-            <div className="kpi green"><div className="lbl">Nhóm nhiều ticket nhất</div><div className="val" style={{ fontSize: 16 }}>{topGroup ? topGroup[0] : "—"}</div><div className="note">{topGroup ? `${topGroup[1].toLocaleString("vi-VN")} ticket` : "—"}</div></div>
+            {/* 07/09/2026: 2 thẻ dưới đây trước chỉ hiển thị chữ, không bấm được — đây đúng
+                là chỗ Sếp bấm mà danh sách bên phải không lọc theo. Giờ bấm được, lọc y hệt
+                bấm vào mục tương ứng ở sidebar trái (reset về đúng phạm vi TOÀN CỤM vì cả 2
+                số này đều tính trên toàn bộ ticket, không theo phạm vi đang chọn). */}
+            <div
+              className="kpi ink kpi-click"
+              role="button" tabIndex={0}
+              onClick={() => topCategory && setCategory(topCategory[0])}
+              onKeyDown={(e) => { if (e.key === "Enter" && topCategory) setCategory(topCategory[0]); }}
+              title={topCategory ? "Bấm để lọc theo loại này" : undefined}
+            >
+              <div className="lbl">Loại yêu cầu nhiều nhất</div><div className="val" style={{ fontSize: 16 }}>{topCategory ? CATEGORY_META[topCategory[0] as TicketCategory]?.short || topCategory[0] : "—"}</div><div className="note">{topCategory ? `${topCategory[1].toLocaleString("vi-VN")} ticket` : "—"}</div>
+            </div>
+            <div
+              className="kpi green kpi-click"
+              role="button" tabIndex={0}
+              onClick={() => topGroup && pickGroup(topGroup[0])}
+              onKeyDown={(e) => { if (e.key === "Enter" && topGroup) pickGroup(topGroup[0]); }}
+              title={topGroup ? "Bấm để lọc theo nhóm này" : undefined}
+            >
+              <div className="lbl">Nhóm nhiều ticket nhất</div><div className="val" style={{ fontSize: 16 }}>{topGroup ? topGroup[0] : "—"}</div><div className="note">{topGroup ? `${topGroup[1].toLocaleString("vi-VN")} ticket` : "—"}</div>
+            </div>
             <div className="kpi"><div className="lbl">Mới nhất</div><div className="val" style={{ fontSize: 18 }}>{data.tickets[0] ? fmtTime(data.tickets[0].time) : "—"}</div><div className="note">{data.tickets[0]?.groupName || "—"}</div></div>
           </div>
 
@@ -186,7 +213,7 @@ export function TicketVanTai() {
                   <button className={"ticket-side-item" + (group === "" ? " active" : "")} onClick={() => pickGroup("")}>
                     <span>Tất cả nhóm</span><span className="cnt">{data.tickets.length}</span>
                   </button>
-                  {data.groupNames.map((g) => (
+                  {groupNamesByCount.map((g) => (
                     <button key={g} className={"ticket-side-item" + (group === g ? " active" : "")} onClick={() => pickGroup(g)}>
                       <span>{g}</span><span className="cnt">{groupCounts.get(g) || 0}</span>
                     </button>
