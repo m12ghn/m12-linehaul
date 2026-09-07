@@ -1,0 +1,212 @@
+/* ============================================================
+   GHN·GateFlow — MÀN ĐĂNG NHẬP (dark, 2 cột)
+   CSS đóng gói riêng (prefix .gf-) — không đụng design system
+   sáng màu trong index.css.
+   ============================================================ */
+.gf-login {
+  --gf-bg-left: #0a0a0c;
+  --gf-bg-right: #0d121a;
+  --gf-field: #171e2b;
+  --gf-field-line: #2b3546;
+  --gf-text: #f2f5f8;
+  --gf-muted: #8b96a6;
+  --gf-placeholder: #6a7585;
+  --gf-green: #2ec27e;
+  --gf-amber: #eea23a;
+  --gf-shield: #e2453b;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  overflow: auto;
+  font-family: 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, system-ui, sans-serif;
+  color: var(--gf-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- CỘT TRÁI: thương hiệu ---------- */
+.gf-brand {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 120px 40px 40px;
+  background:
+    radial-gradient(760px 520px at 0% 0%, rgba(241, 90, 36, .20), rgba(241, 90, 36, 0) 62%),
+    radial-gradient(520px 360px at 12% 6%, rgba(255, 138, 61, .10), rgba(255, 138, 61, 0) 70%),
+    var(--gf-bg-left);
+}
+.gf-logo {
+  width: 112px;
+  height: 112px;
+  border-radius: 26px;
+  object-fit: cover;
+  display: block;
+}
+.gf-brand-title {
+  margin-top: 22px;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -.015em;
+  color: #fff;
+}
+.gf-brand-sub {
+  margin-top: 9px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--gf-muted);
+}
+
+/* ---------- CỘT PHẢI: form ---------- */
+.gf-panel {
+  flex: 0 0 620px;
+  max-width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 40px 56px 86px 64px;
+  background: var(--gf-bg-right);
+  border-left: 1px solid rgba(255, 255, 255, .05);
+}
+.gf-form { width: 100%; max-width: 382px; }
+.gf-title {
+  padding-bottom: 6px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: var(--gf-text);
+}
+
+.gf-label {
+  display: block;
+  margin: 18px 0 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--gf-muted);
+}
+.gf-input {
+  width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--gf-field-line);
+  background: var(--gf-field);
+  color: var(--gf-text);
+  font-family: inherit;
+  font-size: 15px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.gf-input::placeholder { color: var(--gf-placeholder); }
+.gf-input:focus { border-color: #3d4a5f; box-shadow: 0 0 0 3px rgba(46, 194, 126, .12); }
+
+.gf-pw { position: relative; }
+.gf-pw .gf-input { padding-right: 62px; }
+.gf-eye {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--gf-amber);
+  cursor: pointer;
+}
+.gf-eye:hover { color: #ffb655; }
+
+.gf-submit {
+  width: 100%;
+  height: 52px;
+  margin-top: 46px;
+  border: none;
+  border-radius: 10px;
+  background: var(--gf-green);
+  color: #fff;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background .15s;
+}
+.gf-submit:hover { background: #35d08a; }
+
+.gf-or {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 20px 0 14px;
+  font-size: 12.5px;
+  color: var(--gf-muted);
+}
+.gf-or::before,
+.gf-or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #232c3a;
+}
+
+.gf-oauth {
+  width: 100%;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid #2c3648;
+  border-radius: 10px;
+  background: #1b2331;
+  color: var(--gf-text);
+  font-family: inherit;
+  font-size: 15.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.gf-oauth:hover { background: #212b3c; border-color: #3a465b; }
+.gf-oauth svg { flex: none; }
+
+.gf-oauth-note {
+  margin-top: 12px;
+  text-align: center;
+  font-size: 12.5px;
+  color: #7c8798;
+}
+
+.gf-ver {
+  position: absolute;
+  left: 64px;
+  bottom: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  font-size: 12.5px;
+  letter-spacing: .08em;
+  color: #56616f;
+}
+
+/* ---------- Màn hẹp: xếp dọc ---------- */
+@media (max-width: 1080px) {
+  .gf-brand { padding: 40px; }
+  .gf-panel { flex: 0 0 520px; padding: 40px; }
+  .gf-ver { left: 40px; }
+}
+@media (max-width: 860px) {
+  .gf-login { flex-direction: column; position: static; min-height: 100vh; }
+  .gf-brand { flex: none; padding: 56px 24px 40px; }
+  .gf-panel {
+    flex: 1 1 auto;
+    align-items: center;
+    padding: 32px 24px 84px;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, .05);
+  }
+  .gf-ver { left: 0; right: 0; text-align: center; }
+}
