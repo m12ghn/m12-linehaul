@@ -34,6 +34,18 @@ import {
 let cache: TicketData | null = null;
 let statusCache: TicketStatusData | null = null;
 
+/* 07/09/2026 (khuya) — yêu cầu #3: thêm bộ lọc Trạng thái. "closed" KHÔNG phải giá trị
+   trong bảng ticket_status (Supabase) — chỉ là trạng thái HIỂN THỊ suy ra từ autoClosed
+   (xem src/lib/ticket.ts) cho riêng loại "TC - Đăng ký mới (auto)" đã có phản hồi tự động
+   Duyệt/Từ chối. "" (mặc định, chưa bấm lọc) = ẩn các ticket đã "closed" (đúng yêu cầu
+   "không cần hiện lên nữa"); bấm rõ "Đóng" mới xem lại được. */
+type StatusFilterValue = "" | TicketStatusValue | "closed";
+const CLOSED_META = { label: "🔒 Đóng (tự động)", cls: "" };
+function effectiveStatus(t: Ticket, statusRow?: TicketStatusRow): TicketStatusValue | "closed" {
+  if (t.autoClosed) return "closed";
+  return statusRow?.status || "open";
+}
+
 /** Nhãn ngắn + icon + màu (dùng lại .btbd-pill, xem index.css) cho từng loại yêu cầu. */
 const CATEGORY_META: Record<TicketCategory, { icon: string; short: string; cls: string }> = {
   "Gắn/Lên App": { icon: "📲", short: "Gắn/Lên App", cls: "blue" },
@@ -65,6 +77,8 @@ export function TicketVanTai() {
   const [q, setQ] = useState("");
   const [category, setCategory] = useState<string>("");
   const [group, setGroup] = useState<string>("");
+  const [groupQuery, setGroupQuery] = useState(""); // 07/09 khuya, yêu cầu #4: ô tìm trong cột Nhóm Telegram
+  const [statusFilter, setStatusFilter] = useState<StatusFilterValue>(""); // yêu cầu #3
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [statusData, setStatusData] = useState<TicketStatusData | null>(statusCache);
   const { canDo } = useMyRole();
@@ -139,10 +153,15 @@ export function TicketVanTai() {
       if (category && t.category !== category) return false;
       if (group && t.groupName !== group) return false;
       if (nq && !normSearch(t.content + " " + t.sender).includes(nq)) return false;
+      const eff = effectiveStatus(t, statusData?.status[t.id]);
+      // Mặc định (chưa bấm lọc trạng thái) ẩn ticket đã "closed" tự động — bấm rõ
+      // "Đóng" ở cột Trạng thái mới xem lại (yêu cầu #2+#3, 07/09 khuya).
+      if (statusFilter) { if (eff !== statusFilter) return false; }
+      else if (eff === "closed") return false;
       return true;
     });
-  }, [data, category, group, nq]);
-  const hasFilter = !!(q || category || group);
+  }, [data, category, group, nq, statusFilter, statusData]);
+  const hasFilter = !!(q || category || group || statusFilter);
   const shown = hasFilter ? filtered : filtered.slice(0, TICKET_DEFAULT_LIMIT);
 
   const catCounts = useMemo(() => {
@@ -190,6 +209,30 @@ export function TicketVanTai() {
     );
   }, [catCountsInScope]);
   const scopeTotal = group ? groupCounts.get(group) || 0 : data?.tickets.length || 0;
+
+  // 07/09/2026 (khuya), yêu cầu #4: lọc DANH SÁCH hiển thị ở cột "Nhóm Telegram" theo ô tìm
+  // (không đụng gì tới lựa chọn `group` đang chọn, chỉ thu hẹp các nút hiện ra) — "Tất cả
+  // nhóm" luôn hiện, không bị lọc bởi ô tìm này.
+  const groupNamesFiltered = useMemo(() => {
+    const nq2 = normSearch(groupQuery);
+    if (!nq2) return groupNamesByCount;
+    return groupNamesByCount.filter((g) => normSearch(g).includes(nq2));
+  }, [groupNamesByCount, groupQuery]);
+
+  // 07/09/2026 (khuya), yêu cầu #3: đếm theo Trạng thái, phạm vi = nhóm + loại ĐANG chọn (đúng
+  // kiểu "khoan sâu dần" Nhóm -> Loại -> Trạng thái, giống cách cột 2 đã scope theo cột 1).
+  const statusCountsInScope = useMemo(() => {
+    const m = new Map<StatusFilterValue, number>();
+    for (const t of data?.tickets || []) {
+      if (group && t.groupName !== group) continue;
+      if (category && t.category !== category) continue;
+      const eff = effectiveStatus(t, statusData?.status[t.id]);
+      m.set(eff, (m.get(eff) || 0) + 1);
+    }
+    return m;
+  }, [data, group, category, statusData]);
+  const statusScopeTotalOpenish = (["open", "in_progress", "done"] as StatusFilterValue[])
+    .reduce((sum, s) => sum + (statusCountsInScope.get(s) || 0), 0);
 
   // Chọn nhóm ở cột 1 -> luôn reset loại ở cột 2 (danh sách loại có thể đã đổi hẳn).
   function pickGroup(g: string) {
@@ -263,14 +306,21 @@ export function TicketVanTai() {
               <div className="ticket-side">
                 <div className="ticket-side-section">
                   <div className="ticket-side-title">Nhóm Telegram</div>
+                  <input
+                    className="ticket-side-filter"
+                    placeholder="Tìm nhóm…"
+                    value={groupQuery}
+                    onChange={(e) => setGroupQuery(e.target.value)}
+                  />
                   <button className={"ticket-side-item" + (group === "" ? " active" : "")} onClick={() => pickGroup("")}>
                     <span>Tất cả nhóm</span><span className="cnt">{data.tickets.length}</span>
                   </button>
-                  {groupNamesByCount.map((g) => (
+                  {groupNamesFiltered.map((g) => (
                     <button key={g} className={"ticket-side-item" + (group === g ? " active" : "")} onClick={() => pickGroup(g)}>
                       <span>{g}</span><span className="cnt">{groupCounts.get(g) || 0}</span>
                     </button>
                   ))}
+                  {groupNamesFiltered.length === 0 && <p className="lead" style={{ margin: "4px 8px", fontSize: 12.5 }}>Không có nhóm nào khớp.</p>}
                 </div>
                 <div className="ticket-side-section">
                   <div className="ticket-side-title">Loại yêu cầu{group ? ` — trong "${group}"` : ""}</div>
@@ -282,6 +332,23 @@ export function TicketVanTai() {
                       <span>{CATEGORY_META[c].icon} {CATEGORY_META[c].short}</span><span className="cnt">{catCountsInScope.get(c) || 0}</span>
                     </button>
                   ))}
+                </div>
+                <div className="ticket-side-section">
+                  {/* 07/09/2026 (khuya), yêu cầu #3. "Tất cả trạng thái" = mặc định, KHÔNG tính
+                      ticket đã "Đóng" tự động (khớp đúng hành vi mặc định của bộ lọc `filtered`
+                      ở trên) — bấm rõ dòng "Đóng" bên dưới mới xem lại các ticket đó. */}
+                  <div className="ticket-side-title">Trạng thái{category ? ` — "${CATEGORY_META[category as TicketCategory]?.short || category}"` : ""}</div>
+                  <button className={"ticket-side-item" + (statusFilter === "" ? " active" : "")} onClick={() => setStatusFilter("")}>
+                    <span>Tất cả trạng thái</span><span className="cnt">{statusScopeTotalOpenish}</span>
+                  </button>
+                  {(["open", "in_progress", "done"] as StatusFilterValue[]).map((s) => (
+                    <button key={s} className={"ticket-side-item" + (statusFilter === s ? " active" : "")} onClick={() => setStatusFilter(s)}>
+                      <span>{TICKET_STATUS_META[s as TicketStatusValue].label}</span><span className="cnt">{statusCountsInScope.get(s) || 0}</span>
+                    </button>
+                  ))}
+                  <button className={"ticket-side-item" + (statusFilter === "closed" ? " active" : "")} onClick={() => setStatusFilter("closed")}>
+                    <span>{CLOSED_META.label}</span><span className="cnt">{statusCountsInScope.get("closed") || 0}</span>
+                  </button>
                 </div>
               </div>
 
@@ -346,7 +413,11 @@ interface TicketCardProps {
 function TicketCard({ t, open, onToggle, statusRow, notes, canManage, onChangeStatus, onAddNote }: TicketCardProps) {
   const meta = CATEGORY_META[t.category];
   const status = statusRow?.status || "open";
-  const statusMeta = TICKET_STATUS_META[status];
+  // 07/09/2026 (khuya): ticket "TC - Đăng ký mới (auto)" đã tự "Đóng" (t.autoClosed, xem
+  // ticket.ts) -> LUÔN hiện pill "Đóng" bất kể trạng thái thủ công trong ticket_status (nếu
+  // có), và ẩn hẳn nút đổi trạng thái bên dưới (bấm vào cũng không đổi được gì trên pill vì
+  // autoClosed luôn thắng — ẩn đi cho khỏi rối, tránh nút "chết").
+  const statusMeta = t.autoClosed ? CLOSED_META : TICKET_STATUS_META[status];
   const [noteOpen, setNoteOpen] = useState(notes.length > 0);
   const [draft, setDraft] = useState("");
 
@@ -393,7 +464,13 @@ function TicketCard({ t, open, onToggle, statusRow, notes, canManage, onChangeSt
       </button>
       {noteOpen && (
         <div className="ticket-notes">
-          {canManage && (
+          {t.autoClosed && (
+            <div className="ticket-status-meta">
+              Tự động chuyển "Đóng" — phát hiện phản hồi <b>{t.autoCloseReason === "approved" ? "Đã duyệt" : "Từ chối"}</b>
+              {t.ticketCode ? <> (mã {t.ticketCode})</> : null}.
+            </div>
+          )}
+          {canManage && !t.autoClosed && (
             <div className="ticket-status-actions">
               {(Object.keys(TICKET_STATUS_META) as TicketStatusValue[]).map((s) => (
                 <button

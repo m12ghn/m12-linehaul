@@ -67,7 +67,7 @@ export interface TicketReply {
 }
 
 export interface Ticket {
-  id: string; // groupId + "#" + messageId — khoá hiển thị/lọc
+  id: string; // groupId + "#" + messageId (thêm hậu tố ":n" nếu trùng — xem buildTickets())
   time: Date;
   groupId: string;
   groupName: string;
@@ -77,6 +77,12 @@ export interface Ticket {
   ticketCode: string | null; // TTC-xxxx nếu nội dung có nhắc
   replies: TicketReply[];
   lastActivity: Date; // = time nếu chưa có phản hồi nào, dùng để sắp "mới hoạt động nhất"
+  // 07/09/2026 (khuya) — yêu cầu "TC-Đăng ký mới có phản hồi Duyệt/Từ chối thì đóng":
+  // true nếu ticket "TC - Đăng ký mới (auto)" đã có phản hồi TC-Đã duyệt/Từ chối (auto)
+  // khớp qua mã TTC-xxxx (xem bước 2 gộp luồng bên dưới) — KHÔNG lưu Supabase, tự suy ra
+  // mỗi lần tải vì dữ liệu gốc (Sheet) đã có đủ, tránh phải đồng bộ 2 nơi.
+  autoClosed: boolean;
+  autoCloseReason?: "approved" | "rejected";
 }
 
 interface RawRow {
@@ -185,15 +191,33 @@ function buildTickets(rows: RawRow[]): { tickets: Ticket[]; groupNames: Map<stri
   const groupNames = buildGroupNames(rows);
   const nameOf = (gid: string) => groupNames.get(baseGroupId(gid)) || "(chưa rõ tên nhóm)";
 
-  const byMsgKey = new Map<string, Ticket>(); // groupId#messageId của CHÍNH ticket
+  const byMsgKey = new Map<string, Ticket>(); // groupId#messageId GỐC (chưa chống trùng) của CHÍNH ticket -> dùng để khớp reply-chain
   const byTicketCode = new Map<string, Ticket>(); // TTC-xxxx -> ticket "Đăng ký mới" tương ứng
   const tickets: Ticket[] = [];
+  // 07/09/2026 (khuya): phát hiện qua báo lỗi thật trên production — Sếp lọc theo 1 loại
+  // yêu cầu nhưng thẻ hiện ra lại thuộc loại KHÁC. Nghi vấn hàng đầu: log Sheet có dòng
+  // trùng "Group ID#Message ID" (job userbot ghi lại/ghi đè), khiến 2 ticket KHÁC NHAU
+  // (khác loại) dùng chung 1 khoá `id` -> React (key trùng) và bảng ticket_status/ticket_notes
+  // (khoá chính = id) đều có thể lẫn lộn dữ liệu giữa 2 ticket đó. Chống bằng cách ép `id`
+  // của MỖI ticket luôn duy nhất (thêm hậu tố ":2", ":3"... nếu trùng) — `byMsgKey` (dùng để
+  // khớp reply-chain thật, theo ĐÚNG "Group ID#Message ID" gốc) không đổi, vẫn lấy ticket
+  // ĐẦU TIÊN gặp cho mỗi khoá gốc, giữ nguyên hành vi khớp phản hồi như trước.
+  const usedIds = new Set<string>();
 
   for (const r of rows) {
     if (!isTicketCategory(r.category)) continue;
     const code = r.content.match(TTC_RE)?.[0] || null;
+    const rawKey = r.groupId + "#" + r.messageId;
+    let id = rawKey;
+    if (usedIds.has(id)) {
+      let n = 2;
+      while (usedIds.has(rawKey + ":" + n)) n++;
+      id = rawKey + ":" + n;
+      console.warn(`[ticket.ts] Trùng ID ticket "${rawKey}" trong log Sheet (2 dòng khác nhau cùng Group ID + Message ID) — dùng "${id}" để tránh lẫn dữ liệu giữa 2 ticket.`);
+    }
+    usedIds.add(id);
     const t: Ticket = {
-      id: r.groupId + "#" + r.messageId,
+      id,
       time: r.time,
       groupId: r.groupId,
       groupName: nameOf(r.groupId),
@@ -203,9 +227,10 @@ function buildTickets(rows: RawRow[]): { tickets: Ticket[]; groupNames: Map<stri
       ticketCode: code,
       replies: [],
       lastActivity: r.time,
+      autoClosed: false,
     };
     tickets.push(t);
-    byMsgKey.set(t.id, t);
+    if (!byMsgKey.has(rawKey)) byMsgKey.set(rawKey, t);
     if (r.category === "TC - Đăng ký mới (auto)" && code && !byTicketCode.has(code)) byTicketCode.set(code, t);
   }
 
@@ -229,6 +254,20 @@ function buildTickets(rows: RawRow[]): { tickets: Ticket[]; groupNames: Map<stri
   }
 
   for (const t of tickets) t.replies.sort((a, b) => a.time.getTime() - b.time.getTime());
+
+  // 07/09/2026 (khuya): ticket "TC - Đăng ký mới (auto)" đã có phản hồi TC-Đã duyệt/Từ chối
+  // (auto) khớp qua mã TTC-xxxx (bước 2 ở trên) -> coi như đã có kết quả, không cần GSVT xử
+  // lý tay nữa. Lấy phản hồi SỚM NHẤT trong 2 loại (replies đã sort theo thời gian tăng dần ở
+  // trên) — trường hợp có cả 2 (hiếm, có thể do đổi quyết định) thì tính theo cái đến trước.
+  for (const t of tickets) {
+    if (t.category !== "TC - Đăng ký mới (auto)") continue;
+    const hit = t.replies.find((r) => r.viaTicketCode && (r.category === "TC - Đã duyệt (auto)" || r.category === "TC - Từ chối (auto)"));
+    if (hit) {
+      t.autoClosed = true;
+      t.autoCloseReason = hit.category === "TC - Đã duyệt (auto)" ? "approved" : "rejected";
+    }
+  }
+
   tickets.sort((a, b) => b.time.getTime() - a.time.getTime()); // mới nhất trước
   return { tickets, groupNames };
 }

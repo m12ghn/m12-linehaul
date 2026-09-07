@@ -1,5 +1,4 @@
 import { Clock } from "./Clock";
-import { VisitCounter } from "./VisitCounter";
 import { addressOf, getUser, type AppUser } from "../lib/useUser";
 import { useAdmin } from "../lib/useAdmin";
 import { useTheme } from "../lib/useTheme";
@@ -34,7 +33,8 @@ export function Header({ user, onLogout }: { user?: AppUser | null; onLogout?: (
           <span className="live">● realtime</span>
         </div>
       </div>
-      <VisitCounter />
+      {/* 07/09/2026 (khuya): bỏ khung "lượt truy cập" theo yêu cầu Sếp (xem VisitCounter.tsx —
+          giữ nguyên file component + api/visits cũ, chỉ không render nữa, phòng khi cần lại). */}
       <button
         className="feedback-jump"
         onClick={() =>

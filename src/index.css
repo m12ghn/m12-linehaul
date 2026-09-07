@@ -2029,6 +2029,14 @@ footer .dot-sep { margin: 0 6px; opacity: .5; }
   font-size: 12px; font-weight: 700; color: var(--muted); padding: 4px 8px 8px;
   position: sticky; top: 0; background: var(--white);
 }
+/* 07/09/2026 (khuya), yêu cầu #4: ô tìm nhanh trong cột Nhóm Telegram — nhỏ gọn, khác
+   ".search-box input" (bo tròn to, dùng cho ô tìm nội dung ticket chính). */
+.ticket-side-filter {
+  width: 100%; box-sizing: border-box; margin: 0 0 6px; padding: 6px 9px;
+  border: 1px solid var(--line); border-radius: 8px; font-size: 12.5px;
+  background: var(--white); color: var(--ink); outline: none; transition: .12s;
+}
+.ticket-side-filter:focus { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(255, 82, 0, .1); }
 .ticket-side-item {
   display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
   text-align: left; border: none; background: transparent; border-radius: 9px; padding: 7px 9px;
