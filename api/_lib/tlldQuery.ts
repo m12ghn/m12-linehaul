@@ -17,8 +17,15 @@
 const BASE = () =>
   (globalThis as any).process?.env?.DATA_API_BASE || "https://data-api-provider.ghn.vn";
 
-/** 5 kho của cụm M12 — khớp đúng 5 tab TLLD trong workbook cũ. */
-export const M12_WAREHOUSE_IDS = [2388, 1626, 22883000, 22957000, 21606000];
+/** 2 kho (Tân Thuận/Tân Tạo) dùng làm lưới an toàn OR cùng hub='LM12SC' trong
+ *  qualifying_trips bên dưới — KHÔNG còn là "5 kho cụm M12" như trước 08/09.
+ *  Đổi 08/09 (lần 2): Sếp đối chiếu số liệu thật ngày 07/09 — lọc theo 5
+ *  warehouse_id cũ bị NHIỄU vì kho 1626 xác nhận thuộc HUB KHÁC (không phải
+ *  LM12SC), chuyến đi qua kho 1626 nhưng không thuộc cụm này vẫn bị tính vào.
+ *  Test hub='LM12SC' thuần ra 489, khớp rất sát số chính thống GHN (488) —
+ *  coi là tiêu chí ĐÚNG. Bỏ hẳn 2388/1626/22883000 khỏi danh sách, chỉ giữ
+ *  22957000 (Tân Thuận) và 21606000 (Tân Tạo) làm lưới OR phụ. */
+export const M12_WAREHOUSE_IDS = [22957000, 21606000];
 
 /* ------------------------------------------------------------------
    Câu SQL. Bản ghép của hai câu đang dùng:
@@ -38,27 +45,23 @@ WITH
 -- KHÔNG đổi múi giờ, và đây là chủ ý: tài liệu Data API nội bộ ghi rõ mốc thời
 -- gian bên này "nhãn Z nhưng đã là giờ VN" (khác TruckAir MCP — bên đó UTC thật).
 -- Thêm AT TIME ZONE vào là lệch đi 7 tiếng theo chiều ngược lại.
--- 08/09: mở rộng thêm 2 điều kiện OR theo yêu cầu Sếp — GIỮ NGUYÊN
--- warehouse_id IN (...) làm điều kiện gốc, không bớt kho nào:
---   • hub = 'LM12SC'          — bắt luôn chuyến thuộc hub này dù ghé điểm
---                                dừng có warehouse_id ngoài 5 ID trên.
---   • stoppoint_name IN (...) — 2 kho Tân Thuận (22957000) / Tân Tạo (21606000),
---                                đã nằm trong M12_WAREHOUSE_IDS rồi, thêm khớp
---                                theo TÊN để không sót nếu có dòng nào cùng kho
---                                vật lý nhưng ghi khác warehouse_id (đúng rủi ro
---                                mà khoSql() bên dưới dùng để dò lệch id/tên).
+-- 08/09 (lần 2): Sếp đối chiếu số liệu thật ngày 07/09 với dashboard chính thống
+-- GHN (488 chuyến, hub LM12SC) — lọc THEO warehouse_id (5 kho cũ) bị NHIỄU vì kho
+-- 1626 xác nhận thuộc HUB KHÁC, không phải LM12SC (chuyến đi qua kho 1626 nhưng
+-- không thuộc cụm này vẫn lọt vào, làm sai số liệu). Test hub='LM12SC' THUẦN ra
+-- 489, khớp rất sát số GHN (488) — coi là tiêu chí ĐÚNG.
+-- => Đổi hẳn: hub = 'LM12SC' làm điều kiện CHÍNH, giữ thêm OR warehouse_id IN
+-- (22957000, 21606000) — Tân Thuận/Tân Tạo — làm lưới an toàn cho chuyến ghi hub
+-- sai/thiếu nhưng thực đi qua 2 kho này. Bỏ hẳn 2388/1626/22883000 và điều kiện
+-- theo stoppoint_name (dư thừa, đã phủ bởi warehouse_id ở trên).
 qualifying_trips AS (
   SELECT DISTINCT code
   FROM "ghn-reporting"."fa"."dtm_logistics_trip_detail"
   WHERE date(first_check_in) >= DATE '${tuNgay}'
     AND date(first_check_in) <  DATE '${denNgay}'
     AND (
-      warehouse_id IN (${M12_WAREHOUSE_IDS.join(", ")})
-      OR hub = 'LM12SC'
-      OR stoppoint_name IN (
-        'Kho Giao Hàng Nặng - Tân Thuận - HCM',
-        'Kho Giao Hàng Nặng - Tân Tạo - HCM'
-      )
+      hub = 'LM12SC'
+      OR warehouse_id IN (${M12_WAREHOUSE_IDS.join(", ")})
     )
 ),
 
