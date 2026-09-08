@@ -229,6 +229,9 @@ export const TOP_MENUS: { key: TopMenu; label: string }[] = [
   // 07/09/2026: Ticket Vận Tải — log tin nhắn Telegram (30 group) phân loại thành ticket yêu cầu
   // GSVT xử lý, xem src/lib/ticket.ts + src/views/TicketVanTai.tsx.
   { key: "ticket-vt", label: "Ticket Vận Tải" },
+  // 09/2026: Ticket xin tăng cường — thay dần Google Sheet "Nội thành"/"Nội vùng"
+  // của project riêng tai-tang-cuong-vercel, xem src/views/TicketXinTangCuong.tsx.
+  { key: "ticket-xtc", label: "Ticket xin tăng cường" },
   // 07/09/2026: Sếp yêu cầu tạm ẩn 5 mục dưới đây khỏi menu — toàn bộ code/view/dữ liệu vẫn giữ nguyên,
   // chỉ bỏ khỏi TOP_MENUS nên NavBar không hiện nút nữa (giống cách "Lộ trình" đã ẩn ở trên).
   // MỞ LẠI: bỏ comment các dòng bên dưới là menu hiện lại ngay, không cần sửa gì khác.

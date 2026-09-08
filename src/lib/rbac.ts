@@ -83,6 +83,14 @@ export const MODULES: ModuleDef[] = [
   { key: "ticket-vt", label: "Ticket Vận Tải", icon: "message-square", subs: [
     { key: "*", label: "Ticket vận tải (Telegram)" },
   ]},
+  // 09/2026: module MỚI cho tab "Ticket xin tăng cường" (xem
+  // supabase/migrations/0008_ticket_xin_tang_cuong.sql + api/ticket-xtc.ts).
+  // Chỉ 1 sub "*" (chưa cần chia nhỏ, giống ticket-vt) — action "view" mở cho
+  // mọi vai trò đang có, "edit" (sửa GSVT phản hồi + bật cờ Tạo App) mặc định
+  // chỉ admin, Sếp bật thêm cho vai trò phù hợp qua Ma trận Quyền.
+  { key: "ticket-xtc", label: "Ticket xin tăng cường", icon: "truck", subs: [
+    { key: "*", label: "Ticket xin tăng cường (Nội thành/Nội vùng)" },
+  ]},
 ];
 
 export interface RoleDef { id: string; name: string; code: string; system?: boolean; locked?: boolean; }
@@ -116,9 +124,9 @@ const ACCESS: Record<string, "all" | string[]> = {
   admin: "all",
   deputy: MODULES.map((m) => m.key).filter((k) => k !== "phan-quyen"),
   manager: MODULES.map((m) => m.key).filter((k) => k !== "phan-quyen"),
-  leader: ["tong-quan", "lich-tai", "tlld-tuyen", "san-luong", "ticket-vt"],
-  staff: ["tong-quan", "lich-tai", "san-luong", "ticket-vt"],
-  cluster: ["tong-quan", "lich-tai", "tlld-tuyen", "tang-cuong", "san-luong", "ds-ncc", "plan-event", "sap-lich-tai", "cong-xuat", "ticket-vt"],
+  leader: ["tong-quan", "lich-tai", "tlld-tuyen", "san-luong", "ticket-vt", "ticket-xtc"],
+  staff: ["tong-quan", "lich-tai", "san-luong", "ticket-vt", "ticket-xtc"],
+  cluster: ["tong-quan", "lich-tai", "tlld-tuyen", "tang-cuong", "san-luong", "ds-ncc", "plan-event", "sap-lich-tai", "cong-xuat", "ticket-vt", "ticket-xtc"],
 };
 
 export type SubPerm = Record<ActionKey, boolean>;

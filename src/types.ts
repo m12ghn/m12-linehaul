@@ -42,7 +42,8 @@ export type TopMenu =
   | "plan-event"
   | "sap-lich-tai"
   | "phan-quyen"
-  | "ticket-vt";
+  | "ticket-vt"
+  | "ticket-xtc";
 
 /** Trạng thái tải dữ liệu của 1 vùng */
 export interface SheetData {

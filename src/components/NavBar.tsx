@@ -18,6 +18,7 @@ const MENU_ICON: Record<TopMenu, string> = {
   "sap-lich-tai": "🤖",
   "phan-quyen": "🛡️",
   "ticket-vt": "🎫",
+  "ticket-xtc": "🚛",
 };
 void MENU_ICON; // tạm không render icon (xem bên dưới) — giữ map lại để khôi phục nhanh khi cần
 

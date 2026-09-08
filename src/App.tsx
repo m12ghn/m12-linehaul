@@ -20,6 +20,7 @@ const PlanEvent = lazy(() => import("./views/PlanEvent").then((m) => ({ default:
 const SapLichTai = lazy(() => import("./views/SapLichTai").then((m) => ({ default: m.SapLichTai })));
 const PhanQuyen = lazy(() => import("./views/PhanQuyen").then((m) => ({ default: m.PhanQuyen })));
 const TicketVanTai = lazy(() => import("./views/TicketVanTai").then((m) => ({ default: m.TicketVanTai })));
+const TicketXinTangCuong = lazy(() => import("./views/TicketXinTangCuong").then((m) => ({ default: m.TicketXinTangCuong })));
 import { QABoard } from "./components/QABoard";
 import { LoginScreen } from "./components/LoginScreen";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -242,6 +243,7 @@ export default function App() {
         )}
         {topMenu === "phan-quyen" && <PhanQuyen />}
         {topMenu === "ticket-vt" && <TicketVanTai />}
+        {topMenu === "ticket-xtc" && <TicketXinTangCuong />}
         </Suspense>
         </ErrorBoundary>
         )}
