@@ -8,6 +8,14 @@
    với scope="noi-vung". Nội thành lọc region = "Hồ Chí Minh" ở tầng API
    (xem api/ticket-xtc.ts).
 
+   09/2026 — "build lại giống với sheet": bảng hiện hiển thị ĐỦ layout của
+   sheet "Nội thành" gốc (trừ cột "Date" — trùng lặp với Timestamp/created_at
+   nên bỏ, đã chốt lúc làm CSV import), thay vì chỉ tập con phần GSVT phản
+   hồi như bản đầu. Nhóm cột đăng ký gốc (Timestamp..Ghi chú) + nhóm cột tự
+   động (Note/Đã thông báo tele/bl/blacklist/Hình kho — do Apps Script điền,
+   xem 0009_ticket_xtc_full_columns.sql) hiển thị READ-ONLY; chỉ nhóm GSVT
+   phản hồi + phần bot Playwright ad hoc vẫn sửa được như cũ.
+
    Sửa dữ liệu: mỗi dòng có buffer edit riêng (state `edits`), bấm "💾 Lưu"
    mới gọi API — tránh gọi PATCH liên tục theo từng phím gõ. Dòng đang sửa dở
    (khác dữ liệu server) tô màu nhạt bằng class .rc-dirty (tái dùng từ
@@ -26,6 +34,16 @@ function fmtTime(iso: string | null): string {
   if (!iso) return "—";
   try { return new Date(iso).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); }
   catch { return iso; }
+}
+
+/** Cell chỉ đọc dùng chung cho nhóm cột đăng ký gốc + nhóm cột tự động (Apps
+ *  Script điền) — tránh lặp JSX cho từng cột, các cột này KHÔNG sửa qua UI. */
+function RoCell({ value }: { value: string | number | null | undefined }) {
+  return <span className="xtc-ro">{value === null || value === undefined || value === "" ? "—" : value}</span>;
+}
+
+function BoolBadge({ on }: { on: boolean }) {
+  return <span className={"xtc-pill" + (on ? " on" : "")}>{on ? "Có" : "Không"}</span>;
 }
 
 export function TicketXinTangCuong() {
@@ -133,26 +151,45 @@ export function TicketXinTangCuong() {
 
           {!error && rows && rows.length > 0 && (
             <div className="section-card rt-wrap">
-              <table className="re-stops">
+              <table className="re-stops xtc-table">
                 <thead>
                   <tr>
+                    {/* --- Nhóm đăng ký gốc (khớp cột A-M sheet Nội thành) — CHỈ ĐỌC --- */}
+                    <th>Timestamp</th>
                     <th>Ticket_id</th>
+                    <th>Vùng</th>
+                    <th>Warehouse</th>
+                    <th>Tên BC khác</th>
                     <th>Lộ trình</th>
                     <th>MSNV</th>
+                    <th>Telegram</th>
+                    <th>SĐT</th>
+                    <th>SL kiện</th>
+                    <th>Thể tích cần</th>
                     <th>Ngày · Giờ MM</th>
+                    <th>Ghi chú</th>
+                    {/* --- Nhóm GSVT phản hồi (cột N-U) — SỬA ĐƯỢC --- */}
                     <th>Trạng thái</th>
-                    <th>BKS</th>
-                    <th>Thông tin tài xế</th>
-                    <th>Giờ tới</th>
                     <th>Ngày duyệt</th>
+                    <th>Giờ tới</th>
+                    <th>Mã chuyến</th>
                     <th>Tên NCC</th>
+                    <th>BKS</th>
                     <th>Tải trọng</th>
+                    <th>Thông tin tài xế</th>
+                    {/* --- Nhóm tự động (Apps Script điền) — CHỈ ĐỌC --- */}
+                    <th>Note</th>
                     <th>Về KTC</th>
+                    <th>Đã báo tele</th>
+                    <th>bl</th>
+                    <th>Blacklist</th>
+                    {/* --- Nhóm bot Playwright ad hoc — SỬA ĐƯỢC --- */}
                     <th>Thứ tự điểm</th>
                     <th>Warehouse (ad hoc)</th>
                     <th>Tạo App</th>
-                    <th>Mã chuyến</th>
                     <th>Đã tạo app</th>
+                    {/* --- Đăng ký gốc, chỉ đọc --- */}
+                    <th>Hình kho</th>
                     <th></th>
                   </tr>
                 </thead>
@@ -161,42 +198,59 @@ export function TicketXinTangCuong() {
                     const dirty = isDirty(t);
                     return (
                       <tr key={t.ticket_id} className={dirty ? "rc-dirty" : ""}>
-                        <td>{t.ticket_id}</td>
-                        <td>{t.lo_trinh || "—"}</td>
-                        <td>{t.msnv || "—"}</td>
-                        <td>{t.ngay_mong_muon || "—"} {t.gio_mong_muon || ""}</td>
+                        <td><RoCell value={fmtTime(t.created_at)} /></td>
+                        <td><RoCell value={t.ticket_id} /></td>
+                        <td><RoCell value={t.region} /></td>
+                        <td><RoCell value={t.warehouse_name} /></td>
+                        <td><RoCell value={t.warehouse_khac} /></td>
+                        <td><RoCell value={t.lo_trinh} /></td>
+                        <td><RoCell value={t.msnv} /></td>
+                        <td><RoCell value={t.telegram} /></td>
+                        <td><RoCell value={t.sdt} /></td>
+                        <td><RoCell value={t.so_kien} /></td>
+                        <td><RoCell value={t.the_tich} /></td>
+                        <td><RoCell value={[t.ngay_mong_muon, t.gio_mong_muon].filter(Boolean).join(" ") || null} /></td>
+                        <td><RoCell value={t.ghi_chu} /></td>
                         <td>
                           <input className="pl-in" disabled={!canEdit} value={valueOf(t, "trang_thai") || ""}
                             onChange={(e) => setField(t, "trang_thai", e.target.value)} placeholder="Có xe / Không có xe…" />
-                        </td>
-                        <td>
-                          <input className="pl-in" disabled={!canEdit} value={valueOf(t, "bks") || ""}
-                            onChange={(e) => setField(t, "bks", e.target.value)} placeholder="51C-12345" />
-                        </td>
-                        <td>
-                          <input className="pl-in" disabled={!canEdit} value={valueOf(t, "thong_tin_tx") || ""}
-                            onChange={(e) => setField(t, "thong_tin_tx", e.target.value)} placeholder="Tên: SĐT" />
-                        </td>
-                        <td>
-                          <input className="pl-in" disabled={!canEdit} value={valueOf(t, "gio_toi") || ""}
-                            onChange={(e) => setField(t, "gio_toi", e.target.value)} placeholder="HH:mm" />
                         </td>
                         <td>
                           <input className="pl-in" disabled={!canEdit} value={valueOf(t, "ngay_duyet") || ""}
                             onChange={(e) => setField(t, "ngay_duyet", e.target.value)} />
                         </td>
                         <td>
+                          <input className="pl-in" disabled={!canEdit} value={valueOf(t, "gio_toi") || ""}
+                            onChange={(e) => setField(t, "gio_toi", e.target.value)} placeholder="HH:mm" />
+                        </td>
+                        <td>
+                          <input className="pl-in" disabled={!canEdit} value={valueOf(t, "ma_chuyen") || ""}
+                            onChange={(e) => setField(t, "ma_chuyen", e.target.value)} placeholder="Bot điền sau khi tạo" />
+                        </td>
+                        <td>
                           <input className="pl-in" disabled={!canEdit} value={valueOf(t, "ten_ncc") || ""}
                             onChange={(e) => setField(t, "ten_ncc", e.target.value)} />
+                        </td>
+                        <td>
+                          <input className="pl-in" disabled={!canEdit} value={valueOf(t, "bks") || ""}
+                            onChange={(e) => setField(t, "bks", e.target.value)} placeholder="51C-12345" />
                         </td>
                         <td>
                           <input className="pl-in" disabled={!canEdit} value={valueOf(t, "tai_trong") || ""}
                             onChange={(e) => setField(t, "tai_trong", e.target.value)} />
                         </td>
                         <td>
+                          <input className="pl-in" disabled={!canEdit} value={valueOf(t, "thong_tin_tx") || ""}
+                            onChange={(e) => setField(t, "thong_tin_tx", e.target.value)} placeholder="Tên: SĐT" />
+                        </td>
+                        <td><RoCell value={t.note} /></td>
+                        <td>
                           <input className="pl-in" disabled={!canEdit} value={valueOf(t, "ve_ktc") || ""}
                             onChange={(e) => setField(t, "ve_ktc", e.target.value)} placeholder="HCM01 / HCM20…" />
                         </td>
+                        <td><BoolBadge on={t.da_thong_bao_tele} /></td>
+                        <td><BoolBadge on={t.bl} /></td>
+                        <td><RoCell value={t.blacklist} /></td>
                         <td>
                           <input className="pl-in" type="number" disabled={!canEdit} value={valueOf(t, "thu_tu_diem") ?? ""}
                             onChange={(e) => setField(t, "thu_tu_diem", e.target.value === "" ? null : Number(e.target.value))} />
@@ -210,12 +264,13 @@ export function TicketXinTangCuong() {
                             onChange={(e) => setField(t, "tao_app_trigger", e.target.checked)} />
                         </td>
                         <td>
-                          <input className="pl-in" disabled={!canEdit} value={valueOf(t, "ma_chuyen") || ""}
-                            onChange={(e) => setField(t, "ma_chuyen", e.target.value)} placeholder="Bot điền sau khi tạo" />
-                        </td>
-                        <td>
                           <input className="pl-in" disabled={!canEdit} value={valueOf(t, "da_tao_app") || ""}
                             onChange={(e) => setField(t, "da_tao_app", e.target.value)} placeholder="Bot điền sau khi tạo" />
+                        </td>
+                        <td>
+                          {t.hinh_kho ? (
+                            <a href={t.hinh_kho} target="_blank" rel="noreferrer">🖼️ Xem ảnh</a>
+                          ) : <RoCell value={null} />}
                         </td>
                         <td className="rc-actions">
                           <button className="btn-violet sm" disabled={!canEdit || !dirty || saving === t.ticket_id}
@@ -229,8 +284,9 @@ export function TicketXinTangCuong() {
                 </tbody>
               </table>
               <p className="rt-note">
-                Cập nhật gần nhất: {rows[0] ? fmtTime(rows[0].updated_at) : "—"} · Ticket_id/Lộ trình/MSNV/Ngày·Giờ chỉ đọc (thuộc luồng
-                đăng ký gốc) — các cột còn lại là phần GSVT phản hồi + bot Playwright.
+                Cập nhật gần nhất: {rows[0] ? fmtTime(rows[0].updated_at) : "—"} · Nhóm cột đăng ký gốc (Timestamp…Ghi chú) và nhóm cột
+                tự động (Note/Về KTC?/Đã báo tele/bl/Blacklist/Hình kho — do Apps Script điền bên sheet) hiển thị CHỈ ĐỌC. Sửa được: nhóm
+                GSVT phản hồi (Trạng thái…Thông tin tài xế) + phần bot Playwright ad hoc (Thứ tự điểm/Warehouse/Tạo App/Đã tạo app).
               </p>
             </div>
           )}

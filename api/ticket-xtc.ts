@@ -14,6 +14,9 @@
      Sheet cho GSVT xem hằng ngày.
      scope lọc theo `region`: "noi-thanh" = Hồ Chí Minh, "noi-vung" = còn lại,
      "all"/không truyền = không lọc.
+     select("*") nên tự động trả về CẢ các cột bổ sung ở 0009 (note, ve_ktc,
+     da_thong_bao_tele, bl, blacklist, hinh_kho) khi client cần hiển thị đủ
+     layout giống sheet gốc — không cần sửa gì thêm ở đây khi thêm cột mới.
 
    POST /api/ticket-xtc { action:"save", ticketId, patch:{...} } -> { ok, row }
      Cần quyền "ticket-xtc":"edit" (guard). `patch` chỉ nhận đúng các cột GSVT

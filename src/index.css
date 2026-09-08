@@ -2146,3 +2146,20 @@ button.danger {
   .re-stops { min-width: 560px; }
   .re-filters input { min-width: 0; flex: 1 1 100%; }
 }
+
+/* Module TICKET XIN TĂNG CƯỜNG — thêm 09/2026 (xem src/views/TicketXinTangCuong.tsx +
+   src/lib/ticketXtc.ts). Bảng ".xtc-table" tái dùng style ".re-stops" (RouteEditor) nhưng
+   nhiều cột hơn hẳn (đủ layout sheet) nên cần vài override riêng:
+   - Bỏ style "cột đầu = số thứ tự điểm dừng, rộng 32px" của .re-stops vì cột đầu ở đây là
+     "Timestamp" (dữ liệu thật, không phải số thứ tự).
+   - min-width lớn để .rt-wrap cuộn ngang mượt thay vì các cột bị bóp quá chật. */
+.xtc-table.re-stops { min-width: 1900px; }
+.xtc-table.re-stops td:first-child,
+.xtc-table.re-stops th:first-child { width: auto; color: inherit; }
+.xtc-ro { color: var(--muted, var(--text-muted)); white-space: nowrap; }
+.xtc-pill {
+  display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 11px;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
+  background: var(--line); color: var(--ink-2, var(--text-muted));
+}
+.xtc-pill.on { background: var(--green-soft); color: var(--green); }

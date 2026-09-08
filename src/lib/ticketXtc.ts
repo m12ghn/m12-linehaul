@@ -33,11 +33,16 @@ export interface AddonTripTicket {
   bks: string | null;
   tai_trong: string | null;
   thong_tin_tx: string | null;
+  note: string | null;
   ve_ktc: string | null;
+  da_thong_bao_tele: boolean;
+  bl: boolean;
+  blacklist: string | null;
   thu_tu_diem: number | null;
   warehouse: string | null;
   tao_app_trigger: boolean;
   da_tao_app: string | null;
+  hinh_kho: string | null;
   updated_at: string;
 }
 
