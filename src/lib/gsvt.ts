@@ -7,7 +7,7 @@
       rồi chia cho ca trực theo mốc cắt 07:00 / 15:00 / 23:00.
    ============================================================ */
 import { useEffect, useState } from "react";
-import { loadSheet } from "./sheet";
+import { loadRegion } from "./db/lichTaiApi"; // 01/09/2026: Lịch Tải đã chuyển sang Supabase
 import { startPoll } from "./poll";
 import { normCode } from "./tlld";
 import { parseCSV, findCol } from "./csv";
@@ -154,7 +154,7 @@ export async function loadGsvtVehicles(signal?: AbortSignal): Promise<GsvtVehicl
   // tuyến) khỏi TỔNG HỢP toàn cụm — RÀ LẠI 2026-07-21 (Sếp báo "Lịch tải đang tính sai"): cùng bug
   // đã sửa ở fleetMix.ts trước đây nhưng sót file này.
   const perRegion = await Promise.all(
-    SHEETS.filter((s) => !EXCLUDED_REGION_KEYS.includes(s.key)).map(async (s) => ({ label: s.label, res: await loadSheet(s.gid, signal).catch(() => null) })),
+    SHEETS.filter((s) => !EXCLUDED_REGION_KEYS.includes(s.key)).map(async (s) => ({ label: s.label, res: await loadRegion(s.key, signal).catch(() => null) })),
   );
   // 1 mã tuyến = 1 xe (dedup toàn cụm, giữ bản chi tiết nhất + vùng của bản đó).
   const best = new Map<string, { v: GsvtVehicle; sc: number }>();

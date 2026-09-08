@@ -12,7 +12,7 @@ export function AdminGate({ title }: { title?: string }) {
       <p className="lead" style={{ maxWidth: 480, margin: "0 auto 12px" }}>
         Mục này cần tài khoản có <b>quyền quản trị</b>. Tài khoản của bạn{u ? <> (<b>{u.email}</b>)</> : ""} hiện chưa có quyền dùng mục này.
       </p>
-      <p className="lead" style={{ maxWidth: 480, margin: "0 auto", fontSize: 14.5, color: "#78889a" }}>
+      <p className="lead" style={{ maxWidth: 480, margin: "0 auto", fontSize: 14.5, color: "var(--text-muted)" }}>
         Nếu cần, liên hệ admin để được cấp vai trò phù hợp, hoặc đăng nhập bằng tài khoản có quyền.
       </p>
     </div>

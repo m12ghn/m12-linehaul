@@ -58,7 +58,7 @@ export function TrendChart({ stats }: { stats: PeriodStat[] }) {
     <svg className="sl-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: 240 }}>
       <ChartGradients />
       {[0.6, 0.85, 1].filter((t) => t <= yMax).map((t, i) => (
-        <line key={i} x1={padL} y1={yOf(t)} x2={W - padR} y2={yOf(t)} stroke={t === 0.85 ? "#cfe9da" : t === 0.6 ? "#fbe7c6" : "#eef1f5"} strokeDasharray="4 4" />
+        <line key={i} x1={padL} y1={yOf(t)} x2={W - padR} y2={yOf(t)} stroke={t === 0.85 ? "var(--success-soft)" : t === 0.6 ? "var(--warning-soft)" : "var(--surface-sunken)"} strokeDasharray="4 4" />
       ))}
       {stats.map((s, i) => {
         const x = padL + i * slot + (slot - bw) / 2, v = s.avg ?? 0, y = yOf(v), h = padT + ch - y;
@@ -66,7 +66,7 @@ export function TrendChart({ stats }: { stats: PeriodStat[] }) {
         return (
           <g key={s.period.key}>
             <rect x={x} y={y} width={bw} height={Math.max(0, h)} rx={3}
-              fill={gradOf(col)} stroke={s.period.running ? "#8a97a4" : "none"} strokeDasharray={s.period.running ? "3 2" : undefined}
+              fill={gradOf(col)} stroke={s.period.running ? "var(--text-faint)" : "none"} strokeDasharray={s.period.running ? "3 2" : undefined}
               className="fx-drop" style={{ animationDelay: `${i * 0.05}s` }}>
               <title>{`${s.period.label}: ${pct(s.avg)} · ${s.nRoutes} tuyến${s.period.running ? " (đang chạy)" : ""}`}</title>
             </rect>
@@ -77,18 +77,18 @@ export function TrendChart({ stats }: { stats: PeriodStat[] }) {
       })}
       {meanAvg != null && (
         <g>
-          <line x1={padL} y1={yOf(meanAvg)} x2={W - padR} y2={yOf(meanAvg)} stroke="#6b3df0" strokeWidth={1.6} strokeDasharray="6 3" opacity={0.85}>
+          <line x1={padL} y1={yOf(meanAvg)} x2={W - padR} y2={yOf(meanAvg)} stroke="var(--chart-3)" strokeWidth={1.6} strokeDasharray="6 3" opacity={0.85}>
             <title>{`TB các kỳ đang xem: ${pct(meanAvg)}`}</title>
           </line>
           {/* Nhãn TB đặt CỐ ĐỊNH ở góc trên-trái (không bám đúng độ cao đường TB) — đặt ngay trên
               đường/sát lề phải sẽ đè lên số % của cột cuối (cột hay được chú ý nhất), rõ nhất khi
               biểu đồ nhiều cột (vd 21 ngày) làm nhãn các cột dồn sát mép phải. Có nền trắng mờ phía
               sau để luôn đọc được dù phía dưới là gì. */}
-          <rect x={padL} y={padT - 2} width={56} height={16} rx={4} fill="#fff" opacity={0.85} />
-          <text x={padL + 4} y={padT + 9} textAnchor="start" fontSize={10.5} fontWeight={800} fill="#6b3df0">TB {pct(meanAvg)}</text>
+          <rect x={padL} y={padT - 2} width={56} height={16} rx={4} fill="var(--surface-card)" opacity={0.85} />
+          <text x={padL + 4} y={padT + 9} textAnchor="start" fontSize={10.5} fontWeight={800} fill="var(--chart-3)">TB {pct(meanAvg)}</text>
         </g>
       )}
-      <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="#cdd6e0" />
+      <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="var(--chart-axis)" />
     </svg>
   );
 }
@@ -123,24 +123,24 @@ function IndexChart({ stats }: { stats: PeriodStat[] }) {
   };
   return (
     <svg className="sl-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: showLabels ? 260 : 220 }}>
-      <line x1={padL} y1={yOf(100)} x2={W - padR} y2={yOf(100)} stroke="#c2ccd8" strokeDasharray="4 4" />
+      <line x1={padL} y1={yOf(100)} x2={W - padR} y2={yOf(100)} stroke="var(--chart-axis)" strokeDasharray="4 4" />
       <text x={padL - 6} y={yOf(100) + 4} textAnchor="end" className="sl-axis">100</text>
-      <path d={path(idxVol)} fill="none" stroke="#1668c7" strokeWidth={2.5} />
-      <path d={path(idxTlld)} fill="none" stroke="#f15a24" strokeWidth={2.5} />
+      <path d={path(idxVol)} fill="none" stroke="var(--chart-2)" strokeWidth={2.5} />
+      <path d={path(idxTlld)} fill="none" stroke="var(--chart-1)" strokeWidth={2.5} />
       {stats.map((s, i) => {
         const x = padL + i * slot;
         return (
           <g key={s.period.key}>
             {idxVol[i] != null && (
               <g>
-                <circle cx={x} cy={yOf(idxVol[i]!)} r={3.4} fill="#1668c7"><title>{`Lượng hàng · ${s.period.label}: ${fmtVN(s.actW)} kg (chỉ số ${Math.round(idxVol[i]!)}, kỳ đầu=100)`}</title></circle>
-                {showLabels && <text x={x} y={yOf(idxVol[i]!) - 8} textAnchor="middle" className="sl-barval" style={{ fill: "#1668c7" }}>{shortNum(s.actW)}kg</text>}
+                <circle cx={x} cy={yOf(idxVol[i]!)} r={3.4} fill="var(--chart-2)"><title>{`Lượng hàng · ${s.period.label}: ${fmtVN(s.actW)} kg (chỉ số ${Math.round(idxVol[i]!)}, kỳ đầu=100)`}</title></circle>
+                {showLabels && <text x={x} y={yOf(idxVol[i]!) - 8} textAnchor="middle" className="sl-barval" style={{ fill: "var(--chart-2)" }}>{shortNum(s.actW)}kg</text>}
               </g>
             )}
             {idxTlld[i] != null && (
               <g>
-                <circle cx={x} cy={yOf(idxTlld[i]!)} r={3.4} fill="#f15a24"><title>{`TLLD · ${s.period.label}: ${pct(s.avg)} (chỉ số ${Math.round(idxTlld[i]!)}, kỳ đầu=100)`}</title></circle>
-                {showLabels && <text x={x} y={yOf(idxTlld[i]!) + 15} textAnchor="middle" className="sl-barval" style={{ fill: "#f15a24" }}>{pct(s.avg)}</text>}
+                <circle cx={x} cy={yOf(idxTlld[i]!)} r={3.4} fill="var(--chart-1)"><title>{`TLLD · ${s.period.label}: ${pct(s.avg)} (chỉ số ${Math.round(idxTlld[i]!)}, kỳ đầu=100)`}</title></circle>
+                {showLabels && <text x={x} y={yOf(idxTlld[i]!) + 15} textAnchor="middle" className="sl-barval" style={{ fill: "var(--chart-1)" }}>{pct(s.avg)}</text>}
               </g>
             )}
             <text x={x} y={H - padB + 15} textAnchor="middle" className="sl-xlb" style={{ fontSize: stats.length > 14 ? 9.5 : 11 }}>{s.period.shortLabel}</text>
@@ -539,8 +539,8 @@ export function TlldClusterReport() {
         <div className="pe-fc-sub">🔗 Tương quan với lượng hàng thực tế <span className="fc-src">· chỉ số (kỳ đầu hiển thị = 100)</span></div>
         <IndexChart stats={shownStats} />
         <div className="fc-legend2">
-          <span><i style={{ background: "#f15a24" }} />TLLD lấp đầy (nhãn % thật)</span>
-          <span><i style={{ background: "#1668c7" }} />Lượng hàng thực tế (nhãn kg thật)</span>
+          <span><i style={{ background: "var(--chart-1)" }} />TLLD lấp đầy (nhãn % thật)</span>
+          <span><i style={{ background: "var(--chart-2)" }} />Lượng hàng thực tế (nhãn kg thật)</span>
         </div>
         <p className="pe-sub" style={{ margin: "4px 0 0", fontSize: 13 }}>
           2 đường được quy về CHỈ SỐ (kỳ đầu tiên hiển thị = 100) để so sánh HÌNH DẠNG xu hướng dù đơn vị khác nhau (% vs kg) — nhãn số cạnh mỗi điểm là GIÁ TRỊ THẬT, không phải chỉ số. Đường đi CÙNG CHIỀU (cùng lên/xuống) = lượng hàng ảnh hưởng nhiều tới TLLD; đi NGƯỢC CHIỀU = TLLD đang bị chi phối bởi yếu tố khác (điều xe, ghép tải…).

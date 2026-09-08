@@ -128,7 +128,7 @@ export function TcEventHistoryReport({ allRoutes }: { allRoutes: TcEvRoute[] }) 
         </>
       )}
 
-      <div style={{ fontSize: 14, lineHeight: 1.65, color: "#3a4753", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px", marginTop: 12 }}
+      <div style={{ fontSize: 14, lineHeight: 1.65, color: "var(--text-body)", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px", marginTop: 12 }}
         dangerouslySetInnerHTML={{ __html: "<b>🤖 Nhận định:</b> " + insight }} />
     </div>
   );

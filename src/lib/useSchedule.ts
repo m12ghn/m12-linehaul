@@ -1,5 +1,10 @@
 /* ============================================================
    Hook: tải dữ liệu 1 vùng (gid) + tự đồng bộ định kỳ + làm mới tay.
+
+   ⚠ 01/09/2026: KHÔNG còn ai gọi hook này nữa — App.tsx và GhepTai.tsx đã đổi
+   sang src/lib/db/useLichTai.ts (đọc Supabase thay vì Sheet). Giữ nguyên file
+   này lại (không xoá) để còn so sánh/rollback nếu cần trong giai đoạn đầu sau
+   khi đổi; xoá hẳn khi đã chắc ăn không cần nữa.
    ============================================================ */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadSheet } from "./sheet";

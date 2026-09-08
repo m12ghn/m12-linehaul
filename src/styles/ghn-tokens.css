@@ -1,0 +1,159 @@
+/* ============================================================
+   GHN — HỆ MÀU CHÍNH THỨC (Giao Hàng Nặng)
+   Nguồn: "Config màu GHN cho dashboard" — tài liệu bàn giao từ brand.
+   KHÔNG sửa giá trị trong file này. Muốn đổi giao diện thì đổi phần
+   ánh xạ ở đầu src/index.css, đừng đụng vào bảng gốc bên dưới.
+
+   Nguyên tắc: tối giản, tương phản cao. Tỷ lệ 55% đen · 35% teal · 10% trắng.
+   Teal là MÀU TÍN HIỆU DUY NHẤT — dành cho số liệu, biểu đồ, nút chính,
+   focus ring. Mỗi khối giao diện chỉ nên có một điểm nhấn teal.
+   ============================================================ */
+
+:root {
+  /* Báo cho trình duyệt biết đang ở nền nào -> thanh cuộn, ô nhập, lịch ngày
+     của hệ điều hành tự đổi theo, không phải tự vẽ lại. */
+  color-scheme: light;
+
+  /* ---- 3 màu lõi ---- */
+  --ghn-black: #000000;   /* nền tảng: sidebar, top bar, khối dữ liệu nhấn mạnh */
+  --ghn-teal:  #00a19a;   /* Petronas Teal: dữ liệu, công nghệ, chuyển động */
+  --ghn-white: #ffffff;   /* khoảng thở, mặt card, chữ trên nền đen */
+
+  /* ---- Dải teal: biểu đồ, mức độ tải, glow trên nền đen ---- */
+  --teal-900: #00312e;
+  --teal-800: #00524e;
+  --teal-700: #00726c;
+  --teal-600: #008b83;
+  --teal-500: #00a19a;   /* = neo thương hiệu */
+  --teal-400: #00c5b9;
+  --teal-300: #00e5d8;
+  --teal-200: #00fff5;   /* cyan cực đại — chỉ dùng cho glow/điểm nhấn */
+  --teal-100: #cceeeb;
+  --teal-50:  #e8f7f6;
+
+  /* ---- Dải trung tính: nền, viền, cấp bậc chữ ---- */
+  --gray-950: #000000;
+  --gray-900: #1a1a1a;
+  --gray-800: #333333;
+  --gray-700: #4d4d4d;
+  --gray-600: #666666;
+  --gray-500: #808080;
+  --gray-400: #999999;
+  --gray-300: #b3b3b3;
+  --gray-200: #cccccc;
+  --gray-150: #dcdedf;
+  --gray-100: #e9ebec;
+  --gray-50:  #f4f5f5;
+
+  /* ---- Status: CHỈ dùng cho trạng thái đơn / xe, không dùng trang trí ---- */
+  --color-success: #12a150;   /* giao đúng hẹn */
+  --color-warning: #d9820a;   /* chậm tiến độ */
+  --color-danger:  #d92d20;   /* sự cố / huỷ */
+  --color-info:    var(--teal-500);   /* đang vận chuyển */
+
+  /* Nền nhạt của status — brand không quy định, suy ra từ ramp để dùng cho
+     chip/badge trong bảng dữ liệu dày đặc. Giữ ở mức rất nhạt để không phá tỷ lệ màu. */
+  --success-soft: #e7f5ed;
+  --warning-soft: #fbf1e2;
+  --danger-soft:  #fbeae8;
+
+  /* ============================================================
+     SEMANTIC — ngữ cảnh SÁNG (mặc định)
+     ============================================================ */
+  --surface-page:    var(--gray-50);
+  --surface-card:    var(--ghn-white);
+  --surface-sunken:  var(--gray-100);   /* vùng trũng, hàng zebra */
+  --surface-inverse: var(--ghn-black);
+
+  --text-strong:   var(--ghn-black);    /* tiêu đề, số KPI */
+  --text-body:     var(--gray-800);
+  --text-muted:    var(--gray-600);     /* nhãn, đơn vị, trục chart */
+  --text-faint:    var(--gray-400);
+  --text-onaccent: var(--ghn-white);
+  --text-oninverse:var(--ghn-white);
+  --text-link:       var(--teal-600);
+  --text-link-hover: var(--teal-700);
+
+  --border-subtle: var(--gray-200);     /* hairline 1px */
+  --border-strong: var(--ghn-black);
+  --border-accent: var(--teal-500);
+
+  --accent:       var(--teal-500);
+  --accent-hover: var(--teal-600);
+  --accent-press: var(--teal-700);
+  --accent-soft:  var(--teal-50);
+  --focus-ring:   var(--teal-500);
+
+  /* ---- Chart series (ngữ cảnh sáng) ----------------------------------
+     Brand cấm dùng màu ngoài 2 dải teal/gray cho chart. Bộ 4 màu brand đề xuất
+     (teal-500 → teal-600 → teal-800 → gray-300) đã được đo lại và KHÔNG đạt:
+     teal-500 cạnh teal-600 chỉ cách nhau ΔE 6.7 — mắt thường còn khó phân biệt,
+     người mù màu thì chịu. Thứ tự dưới đây giữ đúng 2 dải cho phép nhưng xen kẽ
+     teal/xám và nhảy bậc sáng-tối, đo lại đạt ΔE thấp nhất 28.3 (mắt thường) và
+     23.9 (mù màu) giữa 2 màu liền kề.
+     GÁN THEO THỨ TỰ CỐ ĐỊNH, KHÔNG XOAY VÒNG. Quá 6 nhóm thì gộp phần còn lại
+     vào "Khác" (--chart-other) — thêm màu thứ 7 là bịa ra ngoài bảng brand.
+     Lưu ý: chart-3 và chart-5 tương phản dưới 3:1 trên nền trắng, nên chỗ nào
+     dùng 2 màu này phải có nhãn số trực tiếp hoặc bảng dữ liệu kèm theo. */
+  --chart-1: var(--teal-500);
+  --chart-2: var(--teal-900);
+  --chart-3: var(--teal-300);
+  --chart-4: var(--gray-700);
+  --chart-5: var(--gray-300);
+  --chart-6: var(--teal-700);
+  --chart-other: var(--gray-400);   /* nhóm gộp "Khác" — luôn là xám, không bao giờ teal */
+  --chart-grid: var(--border-subtle);
+  --chart-axis: var(--gray-300);
+
+  --glow-teal:    0 0 24px rgba(0, 161, 154, .45);
+  --glow-teal-sm: 0 0 12px rgba(0, 161, 154, .35);
+}
+
+/* ============================================================
+   SEMANTIC — ngữ cảnh TỐI (.ghn-dark trên thẻ gốc)
+   Đây mới là "môi trường chữ ký" của thương hiệu: nền đen, chữ trắng, teal phát sáng.
+   ============================================================ */
+.ghn-dark {
+  color-scheme: dark;
+  --surface-page:    var(--ghn-black);
+  --surface-card:    #0c0d0d;
+  --surface-sunken:  #141515;
+  --surface-inverse: var(--ghn-white);
+
+  --text-strong:   var(--ghn-white);
+  --text-body:     var(--gray-200);
+  --text-muted:    var(--gray-400);
+  --text-faint:    var(--gray-600);
+  --text-oninverse:var(--ghn-black);
+  --text-link:       var(--teal-300);
+  --text-link-hover: var(--teal-200);
+
+  --border-subtle: #262828;
+  --border-strong: var(--ghn-white);
+  --border-accent: var(--teal-400);
+
+  --accent:       var(--teal-400);
+  --accent-hover: var(--teal-300);
+  --accent-press: var(--teal-500);
+  --accent-soft:  rgba(0, 161, 154, .14);
+  --focus-ring:   var(--teal-300);
+
+  /* Thứ tự riêng cho nền đen — KHÔNG phải lật ngược bộ nền sáng, mà chọn lại
+     từ đúng 2 dải rồi đo trên nền #0c0d0d: cả 3 phép kiểm (mù màu, mắt thường,
+     tương phản với nền) đều đạt, ΔE thấp nhất giữa 2 màu liền kề là 16.9. */
+  --chart-1: var(--teal-300);
+  --chart-2: var(--gray-500);
+  --chart-3: var(--teal-100);
+  --chart-4: var(--teal-700);
+  --chart-5: var(--gray-300);
+  --chart-6: var(--teal-500);
+  --chart-other: var(--gray-600);
+  --chart-grid: var(--border-subtle);
+  --chart-axis: var(--gray-700);   /* trên nền đen, trục phải chìm chứ không sáng hơn dữ liệu */
+
+  /* Nền status trên nền đen: dùng lớp phủ mờ thay vì màu pastel,
+     pastel sáng đặt trên nền đen sẽ chói và phá tỷ lệ 55/35/10. */
+  --success-soft: rgba(18, 161, 80, .16);
+  --warning-soft: rgba(217, 130, 10, .16);
+  --danger-soft:  rgba(217, 45, 32, .16);
+}

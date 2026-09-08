@@ -38,7 +38,7 @@ export function DailyActionTable({ plan, periodKey }: { plan: PlanResult; period
                 ? `Bù thêm ${dayGap} xe (NCC/thuê nóng)`
                 : dayExtra > 0 ? "Đủ (đội nền + NCC/GHN đã book)" : "Đủ đội nền, không cần thêm";
               return (
-                <tr key={d.date} style={isPeak ? { background: "#fff6f1" } : undefined}>
+                <tr key={d.date} style={isPeak ? { background: "var(--accent-soft)" } : undefined}>
                   <td style={{ fontWeight: 700 }}>{dm(d.date)}{isPeak && <span title="Ngày cần NHIỀU XE NHẤT (tính theo kg) — có thể khác ngày nhiều đơn nhất" style={{ marginLeft: 4, color: "var(--red)" }}>▲đỉnh</span>}</td>
                   <td className="num" style={{ textAlign: "center", fontWeight: 800 }}>{d.vehNeeded}</td>
                   <td className="num" style={{ textAlign: "center", color: "var(--blue)" }}>{plan.activeNormal}</td>

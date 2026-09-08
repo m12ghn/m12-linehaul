@@ -51,17 +51,15 @@ export const REFRESH_MS = 60 * 1000;
 export const GEO_REFRESH_MS = 5 * 60 * 1000;
 
 /**
- * Nguồn dữ liệu TLLD (tỷ lệ lấp đầy) — workbook riêng.
- * 4 tab hub cùng cấu trúc (cột 0=ngày, 3=mã tuyến, 10=tlld_weight),
- * gộp lại để tra theo mã tuyến.
+ * Workbook TLLD gốc (tỷ lệ lấp đầy) — Sheet cũ.
+ * ⚠ 01/09/2026: src/lib/tlld.ts (TLLD theo mã TUYẾN, dùng ở Tổng Quan/TLLD Tuyến)
+ * ĐÃ CHUYỂN sang đọc api/tlld-live (nguồn Supabase/Data API) — không còn đọc
+ * TLLD_TABS/tlldCsvSources nữa. Hằng số + hàm dưới đây CHỈ còn phục vụ
+ * src/lib/tcTlld.ts (TLLD tuyến TC theo ngày event, pivot riêng — CHƯA chuyển),
+ * dùng chung workbook nhưng qua TC_TLLD_GID (một tab pivot khác, không phải
+ * 4 tab hub trong TLLD_TABS). Đừng xoá khi thấy TLLD_TABS hết chỗ dùng.
  */
 export const TLLD_SHEET_ID = "1VfkJ6HOzCbidoCGqNTnU2Qs2nNMxwkKJw2_gKTSSchM";
-export const TLLD_TABS: { gid: string; hub: string }[] = [
-  { gid: "1276580053", hub: "HCM01" },
-  { gid: "1306265684", hub: "HCM20" },
-  { gid: "294568716", hub: "Sóng Thần" },
-  { gid: "1240709030", hub: "Tân Tạo" },
-];
 
 /**
  * Nguồn CSV cho workbook TLLD. ƯU TIÊN gviz (đọc trực tiếp model sheet -> cập
@@ -199,8 +197,13 @@ export const SHEETS: SheetDef[] = [
   { key: "noi-vung-hcm", gid: "961518640", label: "Nội Vùng HCM", hidden: true },
   { key: "lien-vung-mn", gid: "84848529", label: "Liên Vùng MN" },
   { key: "mbh-song-than", gid: "541305122", label: "MBH Sóng Thần" },
-  { key: "mbh-tan-tao", gid: "1937583700", label: "MBH Tân Tạo" },
-  { key: "mbh-tan-thuan-q7", gid: "722712650", label: "MBH Tân Thuận Q7" },
+  // 01/09/2026: gộp 2 tab cũ "MBH Tân Tạo" (gid 1937583700) + "MBH Tân Thuận
+  // Q7" (gid 722712650) thành 1 tab duy nhất "Mobile Hub" — Sếp xác nhận cấu
+  // trúc sheet Lịch Tải thật đã đổi, không còn tách riêng nữa. Chưa có gid
+  // thật (sheet không public, vẫn nạp qua CSV tải tay — xem
+  // scripts/import-sheets.mjs) nên để trống; xem migration 0006 và mục "TLLD
+  // Tuyến"/trạng thái migration để biết chi tiết đợt gộp này.
+  { key: "mobile-hub", gid: "", label: "Mobile Hub" },
 ];
 
 /** Các vùng HIỂN THỊ trên UI (bỏ vùng `hidden`). Dùng ở MỌI bộ chọn vùng (SheetTabs, dropdown
@@ -223,12 +226,21 @@ export const TOP_MENUS: { key: TopMenu; label: string }[] = [
   // MỞ LẠI: bỏ comment dòng dưới là menu "Lộ trình" hiện lại ngay.
   // { key: "lo-trinh", label: "Lộ trình" },
   { key: "tlld-tuyen", label: "TLLD Tuyến" },
-  { key: "tang-cuong", label: "Vùng HCM" },
-  { key: "san-luong", label: "Sản Lượng" },
-  { key: "ds-ncc", label: "Performance NCC" },
-  { key: "plan-event", label: "Plan Event" },
+  // 07/09/2026: Ticket Vận Tải — log tin nhắn Telegram (30 group) phân loại thành ticket yêu cầu
+  // GSVT xử lý, xem src/lib/ticket.ts + src/views/TicketVanTai.tsx.
+  { key: "ticket-vt", label: "Ticket Vận Tải" },
+  // 09/2026: Ticket xin tăng cường — thay dần Google Sheet "Nội thành"/"Nội vùng"
+  // của project riêng tai-tang-cuong-vercel, xem src/views/TicketXinTangCuong.tsx.
+  { key: "ticket-xtc", label: "Ticket xin tăng cường" },
+  // 07/09/2026: Sếp yêu cầu tạm ẩn 5 mục dưới đây khỏi menu — toàn bộ code/view/dữ liệu vẫn giữ nguyên,
+  // chỉ bỏ khỏi TOP_MENUS nên NavBar không hiện nút nữa (giống cách "Lộ trình" đã ẩn ở trên).
+  // MỞ LẠI: bỏ comment các dòng bên dưới là menu hiện lại ngay, không cần sửa gì khác.
+  // { key: "tang-cuong", label: "Vùng HCM" },
+  // { key: "san-luong", label: "Sản Lượng" },
+  // { key: "ds-ncc", label: "Performance NCC" },
+  // { key: "plan-event", label: "Plan Event" },
   { key: "sap-lich-tai", label: "Trợ lý Lịch Tải" },
-  { key: "phan-quyen", label: "Phân quyền" },
+  // { key: "phan-quyen", label: "Phân quyền" },
 ];
 
 /**
@@ -280,3 +292,47 @@ export function csvSourcesByName(sheetName: string): string[] {
     `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`,
   ];
 }
+
+/** Như csvSourcesByName() nhưng cho 1 sheetId BẤT KỲ (không chỉ workbook chính SHEET_ID) — dùng cho
+ *  workbook BTBD (xem BTBD_SHEET_ID bên dưới), vốn là 1 Google Sheet hoàn toàn khác. */
+export function csvSourcesByNameFrom(sheetId: string, sheetName: string): string[] {
+  return [
+    apiV4SourceByName(sheetId, sheetName),
+    `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`,
+  ];
+}
+
+/**
+ * Workbook Google Sheet của module "Bảo Trì Bảo Dưỡng" (BTBD) — quản lý xe/bảo dưỡng, KHÔNG thuộc
+ * workbook Lịch Tải chính (SHEET_ID). 07/09/2026: Sếp quyết định (qua AskUserQuestion) bỏ hẳn app
+ * tách biệt cũ (repo GitHub linhnd1-code/btbd_dashboard — backend FastAPI + Postgres riêng, định
+ * deploy Render/Vercel) và gộp BTBD thẳng vào dashboard M12 này, đọc trực tiếp đúng Sheet mà backend
+ * cũ từng đọc (sheet_sync.py), y hệt kiểu Lịch Tải/TLLD hồi còn đọc Sheet trực tiếp (không qua DB
+ * riêng). Sheet thuộc Gmail cá nhân, chia sẻ "Anyone with the link can view" (theo ghi chú của repo
+ * cũ) nên đọc công khai được như các *_SHEET_ID khác ở trên.
+ * 3 tab đọc theo TÊN (không cần gid — sheet cũ không lưu gid, chỉ biết tên tab):
+ *  - "Data xe": danh sách xe (đăng ký/đăng kiểm/bảo hiểm/phù hiệu)
+ *  - "Data BTBD": trạng thái bảo dưỡng hiện tại theo ODO từng xe
+ *  - "Lịch sử Bảo dưỡng - sửa chữa": nhật ký từng lượt nhập/xuất xưởng
+ * Xem src/lib/btbd.ts — cột đọc theo VỊ TRÍ (không theo tên tiêu đề), bám đúng cách backend cũ đọc.
+ */
+export const BTBD_SHEET_ID = "1E_fYmNK3TIEMt3xz7JTwG5kmttz_lKbr8xtWRYTDQOY";
+export const BTBD_TAB_VEHICLES = "Data xe";
+export const BTBD_TAB_STATUS = "Data BTBD";
+export const BTBD_TAB_RECORDS = "Lịch sử Bảo dưỡng - sửa chữa";
+
+/**
+ * Workbook Google Sheet "[Linehaul] Log Group Vùng Vận Tải" — log tin nhắn từ ~30 group Telegram
+ * (userbot ghi liên tục vào tab "log", KHÔNG thuộc job/repo của dashboard này — xem src/lib/ticket.ts).
+ * 07/09/2026: Sếp yêu cầu đưa lên dashboard dạng "ticket" (yêu cầu GSVT cần xử lý), đọc trực tiếp Sheet
+ * y hệt BTBD — quyết định qua AskUserQuestion:
+ *  - Phạm vi ticket: chỉ 10 nhóm "Phân loại (auto)" mang tính hành động (xem TICKET_CATEGORIES trong
+ *    src/lib/ticket.ts) — ẩn chat chung/media/xác nhận ngắn/thông báo-trạng-thái tự động (các nhóm này
+ *    gắn vào làm phản hồi/trạng thái của ticket gốc qua reply-chain, không phải ticket riêng).
+ *  - Phạm vi group: gộp cả 30 group (không lọc riêng group NCC).
+ *  - MVP: chỉ hiển thị + lọc/tìm — CHƯA có cột trạng thái Mở/Đã xử lý.
+ * Sheet ban đầu 401 (giới hạn quyền domain @ghn.vn) — Sếp đã đổi "Anyone with the link — Viewer" thành
+ * công lúc 07/09/2026, đọc gviz bình thường sau đó.
+ */
+export const TICKET_SHEET_ID = "10hyIxegHnTtRlxK4Fm5dRaRKJ_4AzIuNnbnRa1N8dUk";
+export const TICKET_GID = "0";

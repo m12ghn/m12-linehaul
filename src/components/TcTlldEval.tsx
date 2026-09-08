@@ -56,7 +56,7 @@ export function TcTlldEval() {
         </table>
       </div>
 
-      <div style={{ fontSize: 14, lineHeight: 1.65, color: "#3a4753", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px", marginTop: 10 }}>
+      <div style={{ fontSize: 14, lineHeight: 1.65, color: "var(--text-body)", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px", marginTop: 10 }}>
         <b>🤖 Nhận định (tự động):</b> {st.n} tuyến TC, TLLD trung bình <b>{pct(st.avg)}</b>.{" "}
         {st.over > 0 && <><b style={{ color: "var(--orange)" }}>{st.over} tuyến quá tải &gt;100%</b> (cần thêm xe): {st.overRoutes.slice(0, 5).map((r) => `${r.code} ${pct(r.avg)}`).join(", ")}. </>}
         {st.low > 0 && <><b style={{ color: "var(--red)" }}>{st.low} tuyến rỗng &lt;60%</b> (nên gom/giảm xe): {st.lowRoutes.slice(0, 5).map((r) => `${r.code} ${pct(r.avg)}`).join(", ")}. </>}

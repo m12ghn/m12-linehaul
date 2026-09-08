@@ -13,7 +13,7 @@ import { Collapsible } from "./Collapsible";
 
 const fmtVN = (v: number) => Math.round(v).toLocaleString("vi-VN");
 // Bảng màu cho donut NCC (xoay vòng).
-const NCC_PALETTE = ["#1668c7", "#f15a24", "#1faa59", "#9b5de5", "#f5a623", "#e23b3b", "#00b8a9", "#6a7b8c"];
+const NCC_PALETTE = ["var(--chart-2)", "var(--chart-1)", "var(--color-success)", "var(--chart-3)", "var(--color-warning)", "var(--color-danger)", "var(--chart-5)", "var(--chart-other)"];
 
 /** Biểu đồ cột đứng đơn giản (label + value). */
 function VBars({ items, unit = "xe" }: { items: { label: string; val: number; col: string }[]; unit?: string }) {
@@ -25,7 +25,7 @@ function VBars({ items, unit = "xe" }: { items: { label: string; val: number; co
   return (
     <svg className="sl-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: 210 }}>
       <ChartGradients />
-      {[0, 0.5, 1].map((f, i) => <line key={i} x1={padL} y1={yOf(f * yMax)} x2={W - padR} y2={yOf(f * yMax)} stroke="#eef1f5" />)}
+      {[0, 0.5, 1].map((f, i) => <line key={i} x1={padL} y1={yOf(f * yMax)} x2={W - padR} y2={yOf(f * yMax)} stroke="var(--surface-sunken)" />)}
       {items.map((d, i) => {
         const x = padL + i * slot + (slot - bw) / 2, y = yOf(d.val), h = padT + ch - y;
         return (
@@ -38,7 +38,7 @@ function VBars({ items, unit = "xe" }: { items: { label: string; val: number; co
           </g>
         );
       })}
-      <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="#cdd6e0" />
+      <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="var(--chart-axis)" />
     </svg>
   );
 }
@@ -81,8 +81,8 @@ function NccTable({ ncc, ghnTC, activeTons }: { ncc: FleetMix["ncc"]; ghnTC: num
             {ghnTC > 0 && (
               <tr style={{ background: "var(--green-soft)" }}>
                 <td className="num" style={{ color: "var(--muted)" }}>—</td>
-                <td style={{ fontWeight: 800, color: "#157a40" }}>GHN (xe nhà) 🏠</td>
-                <td className="num" style={{ textAlign: "center", fontWeight: 800, color: "#157a40" }}>{ghnTC}</td>
+                <td style={{ fontWeight: 800, color: "var(--color-success)" }}>GHN (xe nhà) 🏠</td>
+                <td className="num" style={{ textAlign: "center", fontWeight: 800, color: "var(--color-success)" }}>{ghnTC}</td>
                 <td className="num" style={{ textAlign: "center" }} colSpan={activeTons.length * 2}>giữ làm dự phòng phát sinh</td>
               </tr>
             )}
@@ -152,13 +152,13 @@ export function FleetCharts({ fm }: { fm: FleetMix | null }) {
   // Màu 1 NCC GIỮ NGUYÊN xuyên suốt mọi donut (xếp theo hạng ở donut tổng quát) để dễ đối chiếu mắt.
   const TOP_N = 6;
   const nccColor = new Map(fm.ncc.map((x, i) => [x.name, NCC_PALETTE[i % NCC_PALETTE.length]]));
-  const colorOf = (name: string) => nccColor.get(name) || "#c2cbd6";
+  const colorOf = (name: string) => nccColor.get(name) || "var(--chart-other)";
   const top = fm.ncc.slice(0, TOP_N);
   const restCount = fm.ncc.slice(TOP_N).reduce((a, x) => a + x.count, 0);
   const donutItems = [
     ...top.map((x) => ({ label: x.name, value: x.count, color: colorOf(x.name) })),
-    ...(restCount > 0 ? [{ label: "NCC khác", value: restCount, color: "#c2cbd6" }] : []),
-    ...(fm.ghnTC > 0 ? [{ label: "GHN (xe nhà)", value: fm.ghnTC, color: "#1faa59" }] : []),
+    ...(restCount > 0 ? [{ label: "NCC khác", value: restCount, color: "var(--chart-other)" }] : []),
+    ...(fm.ghnTC > 0 ? [{ label: "GHN (xe nhà)", value: fm.ghnTC, color: "var(--color-success)" }] : []),
   ];
   const TON_DONUT_ORDER: TonKey[] = ["t80", "t50", "t19", "van"];
   const tonDonuts = TON_DONUT_ORDER.filter((k) => activeTons.includes(k)).map((k) => {
@@ -168,7 +168,7 @@ export function FleetCharts({ fm }: { fm: FleetMix | null }) {
     const rest = rows.slice(TOP_N).reduce((a, r) => a + r.value, 0);
     const items = [
       ...topRows.map((r) => ({ label: r.name, value: r.value, color: colorOf(r.name) })),
-      ...(rest > 0 ? [{ label: "NCC khác", value: rest, color: "#c2cbd6" }] : []),
+      ...(rest > 0 ? [{ label: "NCC khác", value: rest, color: "var(--chart-other)" }] : []),
     ];
     return { k, total, items };
   }).filter((d) => d.total > 0);
@@ -195,10 +195,10 @@ export function FleetCharts({ fm }: { fm: FleetMix | null }) {
         <div className="pe-fc-sub">🚗 Xe RIÊNG BIỆT theo biển số <span className="fc-src">· Cố định vs Event (mẫu đã ghi biển số)</span></div>
         <div className="pe-kpis" style={{ marginBottom: 10 }}>
           <div className="pe-kpi"><span className="l">Cố định · tổng xe riêng biệt</span><b style={{ color: "var(--blue)" }}>{fmtVN(fx.veh.distinctBks)}</b><span className="u">/{fx.veh.routes} chuyến · {fx.veh.coveragePct}% có biển số</span></div>
-          <div className="pe-kpi"><span className="l">Cố định · GHN (xe nhà)</span><b style={{ color: "#157a40" }}>{fmtVN(fx.ghnVeh.routes)}</b><span className="u">chuyến/ngày · chưa ghi biển số riêng</span></div>
+          <div className="pe-kpi"><span className="l">Cố định · GHN (xe nhà)</span><b style={{ color: "var(--color-success)" }}>{fmtVN(fx.ghnVeh.routes)}</b><span className="u">chuyến/ngày · chưa ghi biển số riêng</span></div>
           <div className="pe-kpi"><span className="l">Cố định · NCC (thuê ngoài)</span><b style={{ color: "var(--blue)" }}>{fmtVN(fx.nccVeh.distinctBks)}</b><span className="u">xe riêng biệt /{fx.nccVeh.routes} chuyến</span></div>
           <div className="pe-kpi"><span className="l">Event · tổng xe riêng biệt</span><b style={{ color: "var(--orange)" }}>{fmtVN(ev.veh.distinctBks)}</b><span className="u">/{ev.veh.routes} chuyến · {ev.veh.coveragePct}% có biển số</span></div>
-          <div className="pe-kpi"><span className="l">Event · GHN (xe nhà)</span><b style={{ color: "#157a40" }}>{fmtVN(ev.ghnVeh.routes)}</b><span className="u">chuyến · chưa ghi biển số riêng</span></div>
+          <div className="pe-kpi"><span className="l">Event · GHN (xe nhà)</span><b style={{ color: "var(--color-success)" }}>{fmtVN(ev.ghnVeh.routes)}</b><span className="u">chuyến · chưa ghi biển số riêng</span></div>
           <div className="pe-kpi"><span className="l">Event · NCC (thuê ngoài)</span><b style={{ color: "var(--orange)" }}>{fmtVN(ev.nccVeh.distinctBks)}</b><span className="u">xe riêng biệt /{ev.nccVeh.routes} chuyến</span></div>
         </div>
         <div className="pe-comment">🤖 <span dangerouslySetInnerHTML={{ __html: cmtVeh }} /></div>

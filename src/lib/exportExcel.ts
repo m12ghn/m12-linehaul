@@ -89,6 +89,40 @@ function stampNow(): string {
 function safeName(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").replace(/[^A-Za-z0-9]+/g, "_");
 }
+
+/* 08/09/2026 — 2 hàm xuất TỔNG QUÁT (header + mảng hàng phẳng), dùng cho nút "Tải dữ liệu"
+   ở Ticket Vận Tải (và có thể tái dùng cho view khác sau này) — khác các hàm exportXxx() ở
+   trên vốn tự biết cấu trúc dữ liệu domain riêng, 2 hàm này KHÔNG biết gì về ticket/route,
+   chỉ nhận sẵn bảng (header + rows) rồi ghi ra file. */
+
+/** Bọc giá trị theo chuẩn CSV (RFC 4180): có dấu phẩy/ngoặc kép/xuống dòng thì bọc "..", nhân đôi dấu ngoặc kép. */
+function csvEscape(v: string | number): string {
+  const s = String(v ?? "");
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Xuất bảng ra file .csv (UTF-8 kèm BOM để Excel/Google Sheets đọc đúng dấu tiếng Việt khi mở/nhập). */
+export function exportRowsCsv(header: string[], rows: (string | number)[][], filenameBase: string): void {
+  const text = [header, ...rows].map((r) => r.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob(["﻿" + text], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${safeName(filenameBase)}_${stampNow()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/** Xuất bảng ra file .xlsx (mở trực tiếp được bằng Excel hoặc nhập vào Google Sheets). */
+export async function exportRowsXlsx(header: string[], rows: (string | number)[][], filenameBase: string, sheetName = "Dữ liệu"): Promise<void> {
+  const XLSX = await import("xlsx");
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31)); // Excel giới hạn tên sheet 31 ký tự
+  XLSX.writeFile(wb, `${safeName(filenameBase)}_${stampNow()}.xlsx`);
+}
 const pcX = (v: number | null) => (v == null ? "" : Math.round(v * 100) + "%");
 
 /** Xuất bảng TLLD của nhóm tuyến đang xem. */

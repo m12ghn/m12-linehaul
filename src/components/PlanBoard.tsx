@@ -11,10 +11,10 @@ const dm = (d: string) => d.slice(8) + "/" + d.slice(5, 7);
 
 /** Màu theo độ căng tải (ratio so ngày thường). */
 function ratioColor(r: number): string {
-  if (r >= 1.3) return "#e23b3b";
-  if (r >= 1.1) return "#f15a24";
-  if (r >= 0.95) return "#1faa59";
-  return "#9fb0c0";
+  if (r >= 1.3) return "var(--color-danger)";
+  if (r >= 1.1) return "var(--chart-1)";
+  if (r >= 0.95) return "var(--color-success)";
+  return "var(--text-faint)";
 }
 
 /** Biểu đồ cột: NHU CẦU ƯỚC TÍNH theo 1 hướng (Lấy/Giao) — CÓ đội nền/trần THẬT.
@@ -42,7 +42,7 @@ function VehBarsDir({ r, fleet, dir }: { r: PlanResult; fleet: FleetMix | null; 
   const ratio = dir === "lay" ? layShare : 1 - layShare;
   const dirLabel = dir === "lay" ? "Lấy" : "Giao";
   const ceilingDir = dir === "lay" ? fixedLay : fixedOther;
-  const BASE_COL = dir === "lay" ? "#1668c7" : "#f15a24", EXTRA_COL = "#e23b3b";
+  const BASE_COL = dir === "lay" ? "var(--chart-2)" : "var(--chart-1)", EXTRA_COL = "var(--color-danger)";
 
   const needs = r.days.map((d) => Math.round(d.vehNeeded * ratio));
   const yMax = Math.max(...needs, ceilingDir, 1) * 1.16;
@@ -51,8 +51,8 @@ function VehBarsDir({ r, fleet, dir }: { r: PlanResult; fleet: FleetMix | null; 
   return (
     <svg className="sl-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: 250 }}>
       <ChartGradients />
-      {[0, 0.5, 1].map((f, i) => <line key={i} x1={padL} y1={yOf(f * yMax)} x2={W - padR} y2={yOf(f * yMax)} stroke="#eef1f5" />)}
-      {ceilingDir > 0 && <line x1={padL} y1={yOf(ceilingDir)} x2={W - padR} y2={yOf(ceilingDir)} stroke="#e23b3b" strokeDasharray="5 4" />}
+      {[0, 0.5, 1].map((f, i) => <line key={i} x1={padL} y1={yOf(f * yMax)} x2={W - padR} y2={yOf(f * yMax)} stroke="var(--surface-sunken)" />)}
+      {ceilingDir > 0 && <line x1={padL} y1={yOf(ceilingDir)} x2={W - padR} y2={yOf(ceilingDir)} stroke="var(--color-danger)" strokeDasharray="5 4" />}
       {r.days.map((d, i) => {
         const need = needs[i];
         const base = ceilingDir > 0 ? Math.min(need, ceilingDir) : need;
@@ -70,7 +70,7 @@ function VehBarsDir({ r, fleet, dir }: { r: PlanResult; fleet: FleetMix | null; 
           </g>
         );
       })}
-      <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="#cdd6e0" />
+      <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="var(--chart-axis)" />
     </svg>
   );
 }
@@ -84,14 +84,14 @@ function VehBarsTotal({ r }: { r: PlanResult }) {
   const yMax = Math.max(r.peakNeeded, ceiling) * 1.16;
   const n = r.days.length || 1, slot = cw / n, bw = Math.min(46, slot * 0.56);
   const yOf = (v: number) => padT + ch - (v / yMax) * ch;
-  const BASE_COL = "#1668c7", EXTRA_COL = "#e23b3b";
+  const BASE_COL = "var(--chart-2)", EXTRA_COL = "var(--color-danger)";
 
   return (
     <svg className="sl-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ maxHeight: 250 }}>
       <ChartGradients />
-      {[0, 0.5, 1].map((f, i) => <line key={i} x1={padL} y1={yOf(f * yMax)} x2={W - padR} y2={yOf(f * yMax)} stroke="#eef1f5" />)}
-      <line x1={padL} y1={yOf(r.activeNormal)} x2={W - padR} y2={yOf(r.activeNormal)} stroke="#1668c7" strokeDasharray="5 4" />
-      <line x1={padL} y1={yOf(ceiling)} x2={W - padR} y2={yOf(ceiling)} stroke="#e23b3b" strokeDasharray="5 4" />
+      {[0, 0.5, 1].map((f, i) => <line key={i} x1={padL} y1={yOf(f * yMax)} x2={W - padR} y2={yOf(f * yMax)} stroke="var(--surface-sunken)" />)}
+      <line x1={padL} y1={yOf(r.activeNormal)} x2={W - padR} y2={yOf(r.activeNormal)} stroke="var(--chart-2)" strokeDasharray="5 4" />
+      <line x1={padL} y1={yOf(ceiling)} x2={W - padR} y2={yOf(ceiling)} stroke="var(--color-danger)" strokeDasharray="5 4" />
       {r.days.map((d, i) => {
         const x = padL + i * slot + (slot - bw) / 2;
         const base = Math.min(d.vehNeeded, r.activeNormal);
@@ -108,7 +108,7 @@ function VehBarsTotal({ r }: { r: PlanResult }) {
           </g>
         );
       })}
-      <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="#cdd6e0" />
+      <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="var(--chart-axis)" />
     </svg>
   );
 }
@@ -130,10 +130,10 @@ function CoverageBar({ r }: { r: PlanResult }) {
         </div>
       </div>
       <div className="pb-cov-leg">
-        <span><i style={{ background: "#1668c7" }} />Đội nền {r.activeNormal}</span>
-        <span><i style={{ background: "#1faa59" }} />NCC đã book {r.nccBooked}</span>
-        {r.gap > 0 && <span><i style={{ background: "#e23b3b" }} />Thiếu {r.gap}</span>}
-        <b style={{ marginLeft: "auto", color: covered ? "#1faa59" : "#e23b3b" }}>{covered ? "✓ Đủ năng lực" : `⚠ Thiếu ${r.gap} xe`} · đáp ứng {r.coveragePct}%</b>
+        <span><i style={{ background: "var(--chart-2)" }} />Đội nền {r.activeNormal}</span>
+        <span><i style={{ background: "var(--color-success)" }} />NCC đã book {r.nccBooked}</span>
+        {r.gap > 0 && <span><i style={{ background: "var(--color-danger)" }} />Thiếu {r.gap}</span>}
+        <b style={{ marginLeft: "auto", color: covered ? "var(--color-success)" : "var(--color-danger)" }}>{covered ? "✓ Đủ năng lực" : `⚠ Thiếu ${r.gap} xe`} · đáp ứng {r.coveragePct}%</b>
       </div>
     </div>
   );
@@ -163,7 +163,7 @@ function RiskHeat({ r }: { r: PlanResult }) {
           ))}
         </tbody>
       </table>
-      <div className="pb-heat-leg"><span><i style={{ background: "#1faa59" }} />≤+10%</span><span><i style={{ background: "#f15a24" }} />+10→30%</span><span><i style={{ background: "#e23b3b" }} />&gt;+30% căng</span></div>
+      <div className="pb-heat-leg"><span><i style={{ background: "var(--color-success)" }} />≤+10%</span><span><i style={{ background: "var(--chart-1)" }} />+10→30%</span><span><i style={{ background: "var(--color-danger)" }} />&gt;+30% căng</span></div>
     </div>
   );
 }
@@ -210,20 +210,20 @@ export function PlanBoard({ plan, fleet }: { plan: PlanResult | null; fleet: Fle
           {!hasLayGiao || dir === "tong" ? (
             <>
               <div className="pb-reflegend">
-                <span><i className="pb-dash" style={{ background: "#1668c7" }} />Trong nền</span>
-                <span><i className="pb-dash" style={{ background: "#e23b3b" }} />Vượt nền (tăng thêm)</span>
-                <span><i className="pb-dash" style={{ background: "#e23b3b", opacity: 0.5 }} />Trần năng lực <b>{r.activeNormal + r.availExtra}</b> xe</span>
+                <span><i className="pb-dash" style={{ background: "var(--chart-2)" }} />Trong nền</span>
+                <span><i className="pb-dash" style={{ background: "var(--color-danger)" }} />Vượt nền (tăng thêm)</span>
+                <span><i className="pb-dash" style={{ background: "var(--color-danger)", opacity: 0.5 }} />Trần năng lực <b>{r.activeNormal + r.availExtra}</b> xe</span>
               </div>
               <div className="pb-note">
-                Mỗi cột: phần <span style={{ color: "#1668c7", fontWeight: 700 }}>trong nền</span> (đội xe cố định) + phần <span style={{ color: "#e23b3b", fontWeight: 700 }}>tăng thêm</span> (số "+N" ghi trên cột) là phần vượt nền, cần tăng cường; vượt luôn trần năng lực = phải thuê thêm. Đây là số TỔNG CẢ 2 CHIỀU Lấy+Giao theo năng lực hiệu chỉnh (kg/xe/ngày) — xem tab Lấy/Giao để tách riêng theo đội nền thật từng chiều (đếm tuyến từ Lịch Tải).
+                Mỗi cột: phần <span style={{ color: "var(--chart-2)", fontWeight: 700 }}>trong nền</span> (đội xe cố định) + phần <span style={{ color: "var(--color-danger)", fontWeight: 700 }}>tăng thêm</span> (số "+N" ghi trên cột) là phần vượt nền, cần tăng cường; vượt luôn trần năng lực = phải thuê thêm. Đây là số TỔNG CẢ 2 CHIỀU Lấy+Giao theo năng lực hiệu chỉnh (kg/xe/ngày) — xem tab Lấy/Giao để tách riêng theo đội nền thật từng chiều (đếm tuyến từ Lịch Tải).
               </div>
             </>
           ) : (
             <>
               <div className="pb-reflegend">
-                <span><i className="pb-dash" style={{ background: dir === "lay" ? "#1668c7" : "#f15a24" }} />Trong nền</span>
-                <span><i className="pb-dash" style={{ background: "#e23b3b" }} />Vượt nền (tăng thêm)</span>
-                <span><i className="pb-dash" style={{ background: "#e23b3b", opacity: 0.5 }} />Trần năng lực <b>{dir === "lay" ? fleet!.fixedByDir.lay : fleet!.fixedByDir.other}</b> xe</span>
+                <span><i className="pb-dash" style={{ background: dir === "lay" ? "var(--chart-2)" : "var(--chart-1)" }} />Trong nền</span>
+                <span><i className="pb-dash" style={{ background: "var(--color-danger)" }} />Vượt nền (tăng thêm)</span>
+                <span><i className="pb-dash" style={{ background: "var(--color-danger)", opacity: 0.5 }} />Trần năng lực <b>{dir === "lay" ? fleet!.fixedByDir.lay : fleet!.fixedByDir.other}</b> xe</span>
               </div>
               <div className="pb-note">
                 Đang xem hướng <b>{dir === "lay" ? "LẤY" : "GIAO"}</b> — đội nền/trần năng lực = số tuyến THẬT đang chạy hàng ngày trong Lịch Tải, phân theo "Loại tuyến" ({dir === "lay" ? "Lấy HCM01/HCM20/2 Kho/Chiều/MBH" : "Nội thành CA1/CA2/01_FW_20/GHN"}). Số cần MỖI NGÀY (cột) = ƯỚC TÍNH từ tổng xe cần cả kỳ (planEngine, forecast KHÔNG tách hướng) chia theo tỷ lệ đội nền CỐ ĐỊNH ({fleet ? `${fleet.fixedByDir.lay}/${fleet.fixedByDir.lay + fleet.fixedByDir.other}` : "—"} Lấy) — giả định tỷ lệ Lấy/Giao trong phần tăng thêm cũng giống ngày thường, KHÔNG phải dự báo riêng theo hướng (chưa có dữ liệu forecast tách Lấy/Giao).

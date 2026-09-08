@@ -232,7 +232,7 @@ export function DailyAnalysis({ id, digest, title, sub, tools }: {
         </div>
       )}
       {errMsg && (
-        <div className="da-err" style={{ fontSize: 14, color: "var(--red)", background: "var(--red-soft, #fbeae8)", border: "1px solid var(--red)", borderRadius: 8, padding: "7px 11px", margin: "8px 0" }}>
+        <div className="da-err" style={{ fontSize: 14, color: "var(--red)", background: "var(--red-soft, var(--danger-soft))", border: "1px solid var(--red)", borderRadius: 8, padding: "7px 11px", margin: "8px 0" }}>
           {errMsg}
         </div>
       )}

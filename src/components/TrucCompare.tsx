@@ -24,8 +24,8 @@ function PairedHBars({ rows, curLabel, prevLabel }: { rows: TrucCompareRow[]; cu
   return (
     <div>
       <div className="fc-legend2" style={{ marginBottom: 8 }}>
-        <span><i style={{ background: "#f15a24" }} />Book {curLabel}</span>
-        <span><i style={{ background: "#1668c7" }} />Book {prevLabel}</span>
+        <span><i style={{ background: "var(--chart-1)" }} />Book {curLabel}</span>
+        <span><i style={{ background: "var(--chart-2)" }} />Book {prevLabel}</span>
       </div>
       <div className="tcc-chart">
         {rows.map((r) => (
@@ -33,11 +33,11 @@ function PairedHBars({ rows, curLabel, prevLabel }: { rows: TrucCompareRow[]; cu
             <div className="tcc-name" title={r.name}>{r.name}</div>
             <div className="tcc-bars">
               <div className="tcc-bar">
-                <div className="tcc-track"><span className="tcc-fill" style={{ width: `${(r.book88 / maxVal) * 100}%`, background: "#f15a24" }} /></div>
+                <div className="tcc-track"><span className="tcc-fill" style={{ width: `${(r.book88 / maxVal) * 100}%`, background: "var(--chart-1)" }} /></div>
                 <span className="tcc-val">{fmtVN(r.book88)}</span>
               </div>
               <div className="tcc-bar">
-                <div className="tcc-track"><span className="tcc-fill" style={{ width: `${(r.book77 / maxVal) * 100}%`, background: "#1668c7" }} /></div>
+                <div className="tcc-track"><span className="tcc-fill" style={{ width: `${(r.book77 / maxVal) * 100}%`, background: "var(--chart-2)" }} /></div>
                 <span className="tcc-val">{fmtVN(r.book77)}</span>
               </div>
             </div>

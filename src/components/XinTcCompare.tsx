@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import { comparePeriods, type Gran, type XtcRec } from "../lib/xinTangCuong";
 
-const CUR = "#e11d48";  // kỳ này (ĐỎ)
-const PREV = "#1668c7"; // kỳ trước (XANH)
+const CUR = "var(--color-danger)";  // kỳ này (ĐỎ)
+const PREV = "var(--chart-2)"; // kỳ trước (XANH)
 const pct = (v: number | null) => (v == null ? "—" : Math.round(v * 100) + "%");
 const f1 = (n: number) => n.toFixed(n < 10 ? 1 : 0);
 
@@ -79,7 +79,7 @@ export function XinTcCompare({ recs, gran, sel }: { recs: XtcRec[]; gran: Gran; 
       {/* Biểu đồ cột kép TO, có SỐ trên mỗi cột (không chỉ đỉnh), tô cuối tuần, ngày chưa tới làm mờ */}
       <div style={{ overflowX: "auto" }}>
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", height: 300, minWidth: n > 10 ? n * 26 : 420 }}>
-          {[0, 0.5, 1].map((g, i) => <line key={i} x1={padL} y1={yOf(g * max * 1.15)} x2={W - padR} y2={yOf(g * max * 1.15)} stroke="#eef1f5" />)}
+          {[0, 0.5, 1].map((g, i) => <line key={i} x1={padL} y1={yOf(g * max * 1.15)} x2={W - padR} y2={yOf(g * max * 1.15)} stroke="var(--surface-sunken)" />)}
           {bars.map((b, i) => {
             const gx = padL + i * slot + (slot - groupW) / 2;
             const pc = b.prev ? Math.round((b.cur / b.prev - 1) * 100) : null;
@@ -90,7 +90,7 @@ export function XinTcCompare({ recs, gran, sel }: { recs: XtcRec[]; gran: Gran; 
                 <rect x={gx} y={yOf(b.prev)} width={Math.max(1, bw - 1)} height={Math.max(0, padT + ch - yOf(b.prev))} rx={2} fill={PREV} opacity={0.55}>
                   <title>{`${cmp.prevLabel} · ${b.date} (${b.label}): ${b.prev} lượt`}</title>
                 </rect>
-                <rect x={gx + bw} y={yOf(b.cur)} width={Math.max(1, bw - 1)} height={Math.max(0, padT + ch - yOf(b.cur))} rx={2} fill={CUR} stroke={isPeak ? "#b5401a" : undefined} strokeWidth={isPeak ? 1.5 : 0}>
+                <rect x={gx + bw} y={yOf(b.cur)} width={Math.max(1, bw - 1)} height={Math.max(0, padT + ch - yOf(b.cur))} rx={2} fill={CUR} stroke={isPeak ? "var(--accent-press)" : undefined} strokeWidth={isPeak ? 1.5 : 0}>
                   <title>{`${cmp.curLabel} · ${b.date} (${b.label}): ${b.cur} lượt${pc != null ? ` (${pc >= 0 ? "+" : ""}${pc}% vs kỳ trước)` : ""}`}</title>
                 </rect>
                 {/* SỐ trên mỗi cột: kỳ trước (xanh) hiện khi đủ chỗ (≤16 cột); kỳ này (đỏ) LUÔN hiện — đỉnh viền cam */}
@@ -98,11 +98,11 @@ export function XinTcCompare({ recs, gran, sel }: { recs: XtcRec[]; gran: Gran; 
                 {b.cur > 0 && (
                   <text x={gx + bw + bw / 2} y={yOf(b.cur) - 3} textAnchor="middle" style={{ fontSize: isPeak ? 11 : 9, fontWeight: 800, fill: CUR }}>{b.cur}</text>
                 )}
-                {showLabel(i) && <text x={gx + groupW / 2} y={H - padB + 14} textAnchor="middle" style={{ fontSize: 10.5, fill: b.weekend ? "#c47f0a" : "var(--muted)", fontWeight: b.weekend ? 700 : 400 }}>{gran === "tuan" ? `${b.label} ${b.date}` : b.date}</text>}
+                {showLabel(i) && <text x={gx + groupW / 2} y={H - padB + 14} textAnchor="middle" style={{ fontSize: 10.5, fill: b.weekend ? "var(--color-warning)" : "var(--muted)", fontWeight: b.weekend ? 700 : 400 }}>{gran === "tuan" ? `${b.label} ${b.date}` : b.date}</text>}
               </g>
             );
           })}
-          <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="#cdd6e0" />
+          <line x1={padL} y1={padT + ch} x2={W - padR} y2={padT + ch} stroke="var(--chart-axis)" />
         </svg>
       </div>
 
@@ -111,7 +111,7 @@ export function XinTcCompare({ recs, gran, sel }: { recs: XtcRec[]; gran: Gran; 
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><i style={{ width: 11, height: 11, borderRadius: 3, background: PREV, opacity: 0.55, display: "inline-block" }} /> {cmp.prevLabel}</span>
         <span style={{ color: "var(--muted)" }}>▨ nền vàng = cuối tuần · mờ = ngày chưa tới</span>
       </div>
-      <div style={{ fontSize: 14, lineHeight: 1.6, color: "#3a4753", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px" }}
+      <div style={{ fontSize: 14, lineHeight: 1.6, color: "var(--text-body)", background: "var(--bg)", borderLeft: "3px solid var(--orange)", borderRadius: 8, padding: "8px 12px" }}
         dangerouslySetInnerHTML={{ __html: "<b>🤖 Nhận xét:</b> " + insight }} />
     </div>
   );

@@ -2,8 +2,12 @@ import { useEffect, useState, lazy, Suspense, startTransition } from "react";
 import { Header } from "./components/Header";
 import { NavBar } from "./components/NavBar";
 import { SheetTabs } from "./components/SheetTabs";
+import { TeamSidebar, type Team } from "./components/TeamSidebar";
 import { Overview } from "./views/Overview"; // trang đầu -> nạp ngay
 // Các mục còn lại tách chunk, nạp khi mở (giảm JS ban đầu -> web nhẹ & mở nhanh hơn).
+// Btbd chuyển sang lazy 07/09/2026 khi từ trang trống thành 5 tab con thật (xem src/views/Btbd.tsx) —
+// trước đó import thẳng vì chỉ là 1 khối tĩnh nhỏ, giờ đủ lớn để tách chunk theo đúng quy ước chung.
+const Btbd = lazy(() => import("./views/Btbd").then((m) => ({ default: m.Btbd })));
 const LichTai = lazy(() => import("./views/LichTai").then((m) => ({ default: m.LichTai })));
 const Gsvt = lazy(() => import("./views/Gsvt").then((m) => ({ default: m.Gsvt })));
 const LoTrinh = lazy(() => import("./views/LoTrinh").then((m) => ({ default: m.LoTrinh })));
@@ -15,13 +19,16 @@ const DsNcc = lazy(() => import("./views/DsNcc").then((m) => ({ default: m.DsNcc
 const PlanEvent = lazy(() => import("./views/PlanEvent").then((m) => ({ default: m.PlanEvent })));
 const SapLichTai = lazy(() => import("./views/SapLichTai").then((m) => ({ default: m.SapLichTai })));
 const PhanQuyen = lazy(() => import("./views/PhanQuyen").then((m) => ({ default: m.PhanQuyen })));
+const TicketVanTai = lazy(() => import("./views/TicketVanTai").then((m) => ({ default: m.TicketVanTai })));
+const TicketXinTangCuong = lazy(() => import("./views/TicketXinTangCuong").then((m) => ({ default: m.TicketXinTangCuong })));
 import { QABoard } from "./components/QABoard";
-import { EmailGate } from "./components/EmailGate";
+import { LoginScreen } from "./components/LoginScreen";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { useSchedule } from "./lib/useSchedule";
+import { useLichTai } from "./lib/db/useLichTai";
 import { initAutoReload } from "./lib/autoReload";
 import { initLiveGeo } from "./lib/geo";
 import { useUser, addressOf } from "./lib/useUser";
+import { useAdmin } from "./lib/useAdmin";
 import { onNav } from "./lib/nav";
 import { loadRbac, useMyRole } from "./lib/usePermissions";
 import { normSearch } from "./lib/normalize";
@@ -29,28 +36,46 @@ import { VISIBLE_SHEETS, TOP_MENUS, GEO_REFRESH_MS } from "./config";
 import type { TopMenu } from "./types";
 
 export default function App() {
-  const { user, emailLogin, logout } = useUser();
+  const { user, login, logout } = useUser();
+  // Team đang xem — 03/09/2026: Sếp quản lý thêm team "Bảo Trì Bảo Dưỡng" (BTBD) ngoài
+  // Linehaul M12 (toàn bộ nội dung hiện tại). Sidebar ngoài cùng (TeamSidebar) chuyển
+  // qua lại, KHÔNG đụng gì vào NavBar ngang/topMenu hiện có — xem render bên dưới.
+  const [team, setTeam] = useState<Team>("linehaul");
   const [topMenu, setTopMenu] = useState<TopMenu>("tong-quan");
   const [sheetKey, setSheetKey] = useState<string>(VISIBLE_SHEETS[0].key);
   const [category, setCategory] = useState<string>("");
   const [search, setSearch] = useState<string>("");
   const [selected, setSelected] = useState<string | null>(null);
   const [mapMode, setMapMode] = useState<"auto" | "mymap">("auto");
-  const [ltSub, setLtSub] = useState<"lich" | "gsvt" | "cong">("lich"); // sub-tab trong Lịch Tải: Lịch tải | GSVT | Cổng xuất
+  // sub-tab trong Lịch Tải: Lịch tải (Supabase, sửa tại chỗ bằng nút ✎) | GSVT | Cổng xuất.
+  // 03/09/2026: bỏ tab "✏️ Nhập liệu" riêng (đã thay bằng nút ✎ ngay trong RouteCard của
+  // tab Lịch Tải) theo yêu cầu Sếp — xem src/components/RouteCard.tsx.
+  const [ltSub, setLtSub] = useState<"lich" | "gsvt" | "cong">("lich");
   const [tlldSub, setTlldSub] = useState<"tong-quan" | "bao-cao">("tong-quan"); // sub-tab trong TLLD Tuyến: Tổng Quan | Báo Cáo
+  // Tab "🌐 Toàn hub LM12SC" trong TLLD Tuyến (thêm 08/09) — nút PHỤ đặt TRƯỚC 4 tab vùng
+  // (SheetTabs), KHÔNG dùng chung sheetKey (Lịch Tải/Lộ Trình vẫn cần đúng 1 Sheet thật để tải
+  // dữ liệu). Chọn 1 trong 4 tab vùng -> tự tắt lại (xem onChange của SheetTabs bên dưới).
+  const [tlldHubMode, setTlldHubMode] = useState(false);
   // sub-tab trong Plan Event: Kế Hoạch (quyết định hằng ngày) | Chi tiết & Đánh giá (kiểm chứng/tra cứu).
   // CỐ Ý dùng useState thường (không usePersistentState) — luôn reset về "ke-hoach" mỗi lần vào lại
   // trang, tránh kẹt ở tab "Chi tiết" từ lần xem trước khi không còn thấy banner quyết định ngay.
   const [peSub, setPeSub] = useState<"ke-hoach" | "chi-tiet">("ke-hoach");
 
   const sheet = VISIBLE_SHEETS.find((s) => s.key === sheetKey) ?? VISIBLE_SHEETS[0];
-  const { data, refreshing, refresh } = useSchedule(sheet.gid);
-  const { canOpen } = useMyRole(); // kiểm tra quyền theo vai trò -> chặn cả tầng render, không chỉ khoá tab
-  // Sau khi sửa Lịch Tải trên dash (ghi ngược vào Sheet): làm mới ngay + làm mới lại lần nữa sau ~2.5s
-  // (gviz có độ trễ lan truyền ngắn sau khi ghi, gọi lại 1 lần cho chắc ăn thấy đúng giá trị mới).
+  // 01/09/2026: ĐÃ ĐẢO CHIỀU — nguồn Lịch Tải giờ là Supabase (useLichTai), không còn đọc Google
+  // Sheet nữa (trước đó useSchedule(sheet.gid) đọc CSV). Xem lib/db/useLichTai.ts — cùng hình dạng
+  // trả về nên chỉ đổi đúng dòng này + tham số (gid -> key, region_key trên Supabase).
+  const { data, refreshing, refresh } = useLichTai(sheet.key);
+  const { canOpen, canDo } = useMyRole(); // kiểm tra quyền theo vai trò -> chặn cả tầng render, không chỉ khoá tab
+  // Nút "✎ Sửa" trên từng thẻ tuyến (Lịch Tải) CHỈ hiện cho đúng vai trò admin (Sếp yêu cầu
+  // 03/09), tách riêng khỏi quyền RBAC "lich-tai/edit" (canDo ở trên) vốn còn cấp cho "+ Tuyến
+  // mới"/"Xuất Google Sheet" và có thể đúng cho nhiều vai trò khác admin.
+  const { isAdmin } = useAdmin();
+  // Trước đây phải làm mới 2 lần cách nhau 2.5s vì ghi vào Sheet có độ trễ lan truyền (gviz).
+  // Ghi vào Supabase đọc lại được đúng ngay -> không cần trò làm mới kép nữa, nhưng vẫn giữ tên
+  // refreshSoon (nhiều nơi đang gọi) để không phải sửa thêm chỗ khác trong lần đổi này.
   function refreshSoon() {
     refresh();
-    setTimeout(refresh, 2500);
   }
 
   // Đổi vùng -> reset loại tuyến/chọn (GIỮ từ khoá tìm kiếm cho tới khi load lại web).
@@ -99,15 +124,33 @@ export default function App() {
     });
   }, []);
 
-  // Cổng email (lớp ngoài) — chưa đăng nhập thì chưa vào được Dashboard.
-  if (!user) return <EmailGate onEmailLogin={emailLogin} />;
+  // Cổng đăng nhập (lớp ngoài) — chưa đăng nhập thì chưa vào được Dashboard.
+  // 07/09/2026: đổi từ EmailGate (chỉ cần email) sang màn GHN·GateFlow bắt buộc
+  // mật khẩu — mỗi tài khoản đặt/đổi mật khẩu ở mục Phân quyền → Tài khoản nhân sự.
+  if (!user) return <LoginScreen onLogin={login} />;
 
   return (
+    <div className="team-shell">
+      <TeamSidebar active={team} onChange={setTeam} />
+      <div className="team-content">
+      {team === "btbd" ? (
+        <Suspense fallback={<div className="eb-reloading">⏳ Đang mở…</div>}>
+          <Btbd />
+        </Suspense>
+      ) : (
     <>
       <Header user={user} onLogout={logout} />
       <NavBar active={topMenu} onChange={(m) => startTransition(() => setTopMenu(m))} />
       {((topMenu === "lich-tai" && ltSub === "lich") || topMenu === "lo-trinh" || topMenu === "tlld-tuyen") && (
-        <SheetTabs activeKey={sheetKey} onChange={setSheetKey} />
+        <SheetTabs
+          activeKey={sheetKey}
+          onChange={(k) => { setSheetKey(k); setTlldHubMode(false); }}
+          leadingTab={
+            topMenu === "tlld-tuyen"
+              ? { label: "🌐 Toàn hub LM12SC", active: tlldHubMode, onClick: () => setTlldHubMode(true) }
+              : undefined
+          }
+        />
       )}
 
       <div className="page">
@@ -134,6 +177,7 @@ export default function App() {
               <LichTai
                 data={data}
                 regionLabel={sheet.label}
+                regionKey={sheet.key}
                 refreshing={refreshing}
                 onRefresh={refresh}
                 category={category}
@@ -145,7 +189,9 @@ export default function App() {
                 mapMode={mapMode}
                 setMapMode={setMapMode}
                 gid={sheet.gid}
-                canEdit={user?.roleId === "admin"}
+                canEdit={canDo("lich-tai", "edit")}
+                canExport={canDo("lich-tai", "export")}
+                canEditRoute={isAdmin}
                 onSaved={refreshSoon}
                 onSwitchRegion={(g) => { const s = VISIBLE_SHEETS.find((x) => x.gid === g); if (s) setSheetKey(s.key); }}
               />
@@ -170,12 +216,13 @@ export default function App() {
             </div>
             <TlldTuyen
               data={data}
-              regionLabel={sheet.label}
+              regionLabel={tlldHubMode ? "🌐 Toàn hub LM12SC" : sheet.label}
               category={category}
               setCategory={setCategory}
               search={search}
               setSearch={setSearch}
               view={tlldSub}
+              hubMode={tlldHubMode}
             />
           </>
         )}
@@ -195,6 +242,8 @@ export default function App() {
           <SapLichTai mapMode={mapMode} setMapMode={setMapMode} />
         )}
         {topMenu === "phan-quyen" && <PhanQuyen />}
+        {topMenu === "ticket-vt" && <TicketVanTai />}
+        {topMenu === "ticket-xtc" && <TicketXinTangCuong />}
         </Suspense>
         </ErrorBoundary>
         )}
@@ -207,9 +256,12 @@ export default function App() {
           <button className="foot-logout" onClick={logout}>Đổi tài khoản</button>
         </span>
         <br />
-        © M12SC <span className="dot-sep">·</span> Cụm M12 <span className="dot-sep">·</span> Lịch tải
-        Miền Nam <span className="dot-sep">·</span> Dữ liệu đồng bộ tự động từ Google Sheets
+        © M12SC <span className="dot-sep">·</span> Cụm M12 <span className="dot-sep">·</span> Trang quản lý
+        Linehaul M12 <span className="dot-sep">·</span> Dữ liệu đồng bộ tự động từ Google Sheets
       </footer>
     </>
+      )}
+      </div>
+    </div>
   );
 }

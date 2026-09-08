@@ -43,14 +43,17 @@ function CmpLine({ ic, label, cur, prev, note }: { ic?: string; label: string; c
   );
 }
 
+// 7 lối tắt = 7 NHÓM chức năng, không phải 7 trạng thái. Trước đây 3 thẻ mượn
+// màu success/warning/danger làm màu trang trí, nhìn như "Plan Event đang lỗi".
+// Nay lấy theo dải chart, thẻ thứ 7 về xám "Khác" — brand không cho bịa màu mới.
 const QUICK: { key: TopMenu; icon: string; desc: string; color: string }[] = [
-  { key: "lich-tai", icon: "🚚", desc: "Lịch tải & lộ trình từng tuyến theo vùng", color: "#f15a24" },
-  { key: "tlld-tuyen", icon: "📈", desc: "Tỷ lệ lấp đầy xe từng tuyến + nhận định AI", color: "#1faa59" },
-  { key: "tang-cuong", icon: "🌆", desc: "TC Lấy/Giao · Phát sinh · TT-AM · NCC vùng HCM", color: "#1668c7" },
-  { key: "cong-xuat", icon: "🚪", desc: "Phân bổ cổng xuất theo ca", color: "#9b5de5" },
-  { key: "san-luong", icon: "📦", desc: "Sản lượng kho theo ngày/tuần/tháng + AI", color: "#f5a623" },
-  { key: "plan-event", icon: "✈️", desc: "Kế hoạch tải cao điểm + dự trù xe phát sinh", color: "#e23b3b" },
-  { key: "sap-lich-tai", icon: "🤖", desc: "Trợ lý sắp & ghép lịch tải thông minh", color: "#00b8a9" },
+  { key: "lich-tai", icon: "🚚", desc: "Lịch tải & lộ trình từng tuyến theo vùng", color: "var(--chart-1)" },
+  { key: "tlld-tuyen", icon: "📈", desc: "Tỷ lệ lấp đầy xe từng tuyến + nhận định AI", color: "var(--chart-2)" },
+  { key: "tang-cuong", icon: "🌆", desc: "TC Lấy/Giao · Phát sinh · TT-AM · NCC vùng HCM", color: "var(--chart-3)" },
+  { key: "cong-xuat", icon: "🚪", desc: "Phân bổ cổng xuất theo ca", color: "var(--chart-4)" },
+  { key: "san-luong", icon: "📦", desc: "Sản lượng kho theo ngày/tuần/tháng + AI", color: "var(--chart-5)" },
+  { key: "plan-event", icon: "✈️", desc: "Kế hoạch tải cao điểm + dự trù xe phát sinh", color: "var(--chart-6)" },
+  { key: "sap-lich-tai", icon: "🤖", desc: "Trợ lý sắp & ghép lịch tải thông minh", color: "var(--chart-other)" },
 ];
 
 /**
@@ -326,12 +329,12 @@ export function Overview({ onNav, user }: { onNav: (m: TopMenu) => void; user?: 
         {stat && (
           <div className="ov-score">
             <svg width="104" height="104" viewBox="0 0 104 104">
-              <circle cx="52" cy="52" r="42" fill="none" stroke="#eef1f5" strokeWidth="10" />
+              <circle cx="52" cy="52" r="42" fill="none" stroke="var(--surface-sunken)" strokeWidth="10" />
               <circle cx="52" cy="52" r="42" fill="none" stroke={scoreColor} strokeWidth="10" strokeLinecap="round"
                 strokeDasharray={2 * Math.PI * 42} strokeDashoffset={2 * Math.PI * 42 * (1 - stat.score / 100)}
                 transform="rotate(-90 52 52)" className="ov-score-arc" />
               <text x="52" y="50" textAnchor="middle" fontSize="26" fontWeight="800" fill={scoreColor}>{stat.score}</text>
-              <text x="52" y="66" textAnchor="middle" fontSize="9.5" fill="#8a97a4">/100</text>
+              <text x="52" y="66" textAnchor="middle" fontSize="9.5" fill="var(--text-faint)">/100</text>
             </svg>
             <div className="ov-score-lb" style={{ color: scoreColor }}>Sức khoẻ cụm: {scoreLabel}</div>
             <div style={{ fontSize: 11.5, color: "var(--muted)", textAlign: "center", marginTop: 1 }}>điểm 0–100 · {stat.total} tuyến</div>
@@ -421,7 +424,7 @@ export function Overview({ onNav, user }: { onNav: (m: TopMenu) => void; user?: 
                   const hero = lt.cur[1]?.avg ?? null, hprev = lt.rollPrev[1]?.avg ?? null;
                   const hdd = hero != null && hprev != null && hprev > 0 ? Math.round(((hero - hprev) / hprev) * 100) : null;
                   const verdict = hero == null ? "—" : hero > 1 ? "Vượt tải" : hero >= 0.85 ? "Đầy tốt" : hero >= 0.7 ? "Khá ổn" : hero >= 0.6 ? "Hơi thấp" : "Thấp · chạy rỗng";
-                  const hCol = hero != null && hero > 1 ? "#b45309" : fillColor(hero);
+                  const hCol = hero != null && hero > 1 ? "var(--color-warning)" : fillColor(hero);
                   const insight = hdd == null ? "Chưa đủ dữ liệu để đánh giá."
                     : `7 ngày gần nhất lấp đầy TB <b>${pct(hero)}</b> — ${hdd <= -5 ? `<b style="color:var(--red)">giảm ${Math.abs(hdd)}%</b> so 7 ngày trước, xe vơi hơn → ưu tiên GHÉP TẢI` : hdd >= 5 ? `<b style="color:var(--green)">tăng ${hdd}%</b> so 7 ngày trước 👍` : `đi ngang so 7 ngày trước → ổn định`}.`;
                   return (

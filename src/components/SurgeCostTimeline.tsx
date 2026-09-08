@@ -15,7 +15,7 @@ import { TON_COLOR, type TonKey } from "../lib/fleetMix";
 const fmtVND = (n: number) => Math.round(n).toLocaleString("vi-VN") + "đ";
 const fmtVNDCompact = (n: number) => (n >= 1_000_000 ? (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "tr" : n >= 1_000 ? Math.round(n / 1000) + "k" : String(Math.round(n)));
 /** Màu phần "Phát sinh" (không phải 1 tải trọng cụ thể) — tách biệt bảng màu TON_COLOR. */
-const PHATSINH_COLOR = "#9b5de5";
+const PHATSINH_COLOR = "var(--chart-3)";
 
 export interface SurgeCostDay {
   dateIso: string; label: string;
@@ -49,7 +49,7 @@ function SurgeCostChart({ periods, tonKeys, tonLabelOf }: {
     const segs = tonKeys
       .map((k) => {
         const row = p.byTon?.find((r) => r.key === k);
-        return { key: k, label: tonLabelOf(k), n: row?.n ?? 0, cost: row?.cost ?? 0, color: TON_COLOR[k as TonKey] ?? "#8b98a8" };
+        return { key: k, label: tonLabelOf(k), n: row?.n ?? 0, cost: row?.cost ?? 0, color: TON_COLOR[k as TonKey] ?? "var(--text-faint)" };
       })
       .filter((s) => s.cost > 0);
     const phatSinhCost = p.adhocNetCostMax ?? 0;
@@ -108,7 +108,7 @@ function SurgeCostChart({ periods, tonKeys, tonLabelOf }: {
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 4, fontSize: 12, color: "var(--ink-2)" }}>
         {tonKeys.map((k) => (
           <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <i style={{ width: 10, height: 10, borderRadius: 2, background: TON_COLOR[k as TonKey] ?? "#8b98a8", display: "inline-block" }} />
+            <i style={{ width: 10, height: 10, borderRadius: 2, background: TON_COLOR[k as TonKey] ?? "var(--text-faint)", display: "inline-block" }} />
             {tonLabelOf(k)}
           </span>
         ))}

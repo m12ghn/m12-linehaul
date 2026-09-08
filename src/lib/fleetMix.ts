@@ -4,7 +4,7 @@
    - Xe book NCC                  -> đếm tuyến theo NCC từ Tăng Cường Lấy.
    - Đội xe nền "đang có"          -> tham chiếu kỳ event gần đây (10/10, 11/11).
    ============================================================ */
-import { loadSheet } from "./sheet";
+import { loadRegion } from "./db/lichTaiApi"; // 01/09/2026: Lịch Tải đã chuyển sang Supabase
 import { loadTangCuong } from "./tangcuong";
 import { SHEETS, SHEET_ID, TANG_CUONG_LAY_GID, EVENT_T6_GID, EXCLUDED_REGION_KEYS } from "../config";
 
@@ -30,7 +30,7 @@ export const TON_SHORT: Record<TonKey, string> = { van: "Van", t19: "1.9T", t50:
 export const TON_ORDER: TonKey[] = ["van", "t19", "t50", "t80"];
 /** Màu THEO TẢI TRỌNG dùng chung mọi chart trong Plan Event (trước đây khai riêng trong
  *  FleetCharts.tsx) — dùng lại để 1 tải trọng LUÔN cùng 1 màu xuyên suốt các biểu đồ. */
-export const TON_COLOR: Record<TonKey, string> = { van: "#1668c7", t19: "#f15a24", t50: "#1faa59", t80: "#e23b3b" };
+export const TON_COLOR: Record<TonKey, string> = { van: "var(--chart-2)", t19: "var(--chart-1)", t50: "var(--color-success)", t80: "var(--color-danger)" };
 
 /** Phân loại chuỗi tải trọng về 4 nhóm Van / 1.900 / 5.000 / 8.000. */
 export function tonBucket(raw: string): TonKey | null {
@@ -200,7 +200,7 @@ export async function loadFleetMix(signal?: AbortSignal): Promise<FleetMix> {
   // khỏi TỔNG HỢP cụm — cùng chính sách đã áp cho nccFixedCapacity.ts, tránh đếm nhầm tuyến
   // ngoài phạm vi (hoặc dữ liệu tab đã đổi cấu trúc) thành "chưa ghi tải trọng".
   const regionData = await Promise.all(
-    SHEETS.filter((s) => !EXCLUDED_REGION_KEYS.includes(s.key)).map((s) => loadSheet(s.gid, signal).catch(() => null))
+    SHEETS.filter((s) => !EXCLUDED_REGION_KEYS.includes(s.key)).map((s) => loadRegion(s.key, signal).catch(() => null))
   );
   for (const rd of regionData) {
     if (!rd) continue;
