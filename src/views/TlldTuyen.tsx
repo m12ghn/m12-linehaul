@@ -38,10 +38,6 @@ function todayISO(): string {
 
 type TRow = { route: Route; tlld?: TlldRoute };
 const getV = (t?: TlldRoute): number | null => (t ? (t.n1 ?? t.avg7) : null);
-function avgOf(rows: TRow[], sel: (t: TlldRoute) => number | null): number | null {
-  const vals = rows.map((x) => (x.tlld ? sel(x.tlld) : null)).filter((v): v is number => v != null);
-  return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-}
 interface TCol { key: string; title: string; hint: string; warn: TRow[]; items: TRow[]; restStart: number; }
 
 /**
@@ -242,13 +238,6 @@ export function TlldTuyen({
     setFNguon(new Set());
     setLookupRows(null); setLookupErr(null);
   }
-  // Bấm chip "Tuyến lấp đầy <60%" ở KPI (bên dưới) -> tra cứu NGAY tuyến đó, mặc định 30 ngày gần nhất.
-  function lookupRouteChip(code: string) {
-    setFMaTuyen(code); setFMaChuyen(""); setFFrom(""); setFTo(""); setFBsx(""); setFBand("");
-    setFNguon(new Set());
-    runLookup({ maTuyen: code, maChuyen: "", from: "", to: "", bsx: "", band: "", nguon: new Set() });
-  }
-
   // Đúng 1 chuyến khớp bộ lọc -> coi là "đang tra 1 chuyến cụ thể", hiện thẻ chi tiết FULL TRIP.
   const lookupHit = lookupRows && lookupRows.length === 1 ? lookupRows[0] : null;
   const lookupHitRouteText = lookupHit ? index?.byCode.get(normCode(lookupHit.maTuyen))?.routeText : undefined;
@@ -316,20 +305,12 @@ export function TlldTuyen({
     return byCat.map((r) => ({ route: enrich(r), tlld: index?.byCode.get(normCode(r.route)) }));
   }, [hubMode, hubCodes, byCat, allRoutes, index]);
 
-  // KPI vùng (chỉ tính tuyến có dữ liệu)
+  // KPI vùng (chỉ tính tuyến có dữ liệu) — dùng cho tab "Báo Cáo"/LongTrend bên dưới. Khối 4 thẻ
+  // "Tuyến có dữ liệu TLLD / TB lấp đầy N-1 / TB lấp đầy 7 ngày / Tuyến lấp đầy <60%" từng đặt ngay
+  // dưới khung "🩺 Sức khoẻ vận hành TLLD" đã BỎ (08/09, Sếp phản hồi 2 khung cùng hiện số N-1 —
+  // "TB lấp đầy N-1" ở đây trùng hệt "TLLD THEO KHỐI LƯỢNG" bên khung Sức khoẻ — gây rối, khó hiểu).
+  // avgOf/avgN1/avg7 cục bộ + danh sách lowRoutes/chip "tra cứu nhanh" xoá theo, không còn nơi dùng.
   const withData = useMemo(() => rows.filter((x) => x.tlld && (x.tlld.n1 != null || x.tlld.avg7 != null)), [rows]);
-  const avgN1 = useMemo(() => avgOf(withData, (t) => t.n1), [withData]);
-  const avg7 = useMemo(() => avgOf(withData, (t) => t.avg7), [withData]);
-  // Các tuyến lấp đầy < 60% (theo N-1), xếp thấp nhất lên đầu.
-  const lowRoutes = useMemo(
-    () =>
-      withData
-        .map((x) => ({ code: x.route.route, val: x.tlld!.n1 ?? x.tlld!.avg7 ?? 1 }))
-        .filter((x) => x.val < 0.6)
-        .sort((a, b) => a.val - b.val),
-    [withData]
-  );
-  const lowCount = lowRoutes.length;
 
   const columns = useMemo(() => buildColumns(rows), [rows]);
 
@@ -497,48 +478,6 @@ export function TlldTuyen({
           lib/useTlld.ts. KHÔNG bị ảnh hưởng bởi bộ lọc Tra cứu ở trên (03/09 — chỉ dùng để tra
           cứu, không đụng khung này). */}
       <TlldSucKhoe index={regionIndex} />
-
-      <div className="kpi-row tlld" style={{ marginTop: 16 }}>
-        <div className="kpi">
-          <div className="lbl">Tuyến có dữ liệu TLLD</div>
-          <div className="val orange">{withData.length}</div>
-          <div className="note">/ {hubMode ? hubCodes.size : byCat.length} tuyến {hubMode ? "thuộc hub LM12SC" : "vùng này"}</div>
-        </div>
-        <div className="kpi blue">
-          <div className="lbl">TB lấp đầy N-1</div>
-          <div className="val">{pct(avgN1)}</div>
-          <div className="note">ngày {ddmm(index?.refDate ?? null)}</div>
-        </div>
-        <div className="kpi green">
-          <div className="lbl">TB lấp đầy 7 ngày</div>
-          <div className="val">{pct(avg7)}</div>
-          <div className="badge">{index ? `${index.last7.length} ngày gần nhất` : "—"}</div>
-        </div>
-        <div className="kpi ink kpi-low">
-          <div className="kpi-low-main">
-            <div className="lbl">Tuyến lấp đầy &lt; 60%</div>
-            <div className="val" style={{ color: lowCount ? "var(--red)" : "var(--ink)" }}>
-              {lowCount}
-            </div>
-            <div className="note">cần chú ý (theo N-1)</div>
-          </div>
-          {lowCount > 0 && (
-            <div className="kpi-low-list">
-              {lowRoutes.slice(0, 8).map((x) => (
-                <button
-                  key={x.code}
-                  className="low-chip"
-                  title={`${x.code} · ${pct(x.val)} — bấm để tra cứu`}
-                  onClick={() => lookupRouteChip(x.code)}
-                >
-                  {x.code} <b>{pct(x.val)}</b>
-                </button>
-              ))}
-              {lowCount > 8 && <span className="low-more">+{lowCount - 8} tuyến…</span>}
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* Ẩn ở hubMode: tab "🌐 Toàn hub LM12SC" gộp TOÀN BỘ tuyến của hub, không tách theo loại
           tuyến (Sếp yêu cầu — tách biệt hoàn toàn với 4 tab vùng cũ, vốn vẫn giữ CategoryTabs). */}
