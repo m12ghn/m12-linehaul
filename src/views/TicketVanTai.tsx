@@ -21,10 +21,20 @@
 
    07/09/2026 (khuya, lần 3) — thêm bộ lọc theo NGÀY tin nhắn (t.time): nút thả
    xuống trong toolbar cột phải, có sẵn vài mốc nhanh (Hôm nay/Hôm qua/7 ngày
-   gần nhất/30 ngày gần nhất/Tháng này) + 2 ô ngày tuỳ chỉnh (Từ/Đến). Áp dụng
-   ở TẦNG CUỐI của `filtered` (như ô tìm kiếm `q`) — KHÔNG đụng vào các bộ đếm
-   sidebar (Nhóm/Loại/Trạng thái đang scope theo nhau, không theo ngày), đúng
-   tinh thần "tìm kiếm không đổi số đếm" đã có sẵn từ trước.
+   gần nhất/30 ngày gần nhất/Tháng này) + 2 ô ngày tuỳ chỉnh (Từ/Đến).
+
+   07/09/2026 (khuya, lần 4) — Sếp báo bộ đếm 3 cột sidebar chưa "nhảy" theo
+   bộ lọc ngày ở trên: sửa lại, lọc NGÀY giờ nằm ở tầng NGOÀI CÙNG của chuỗi
+   "khoan sâu dần" Ngày -> Nhóm -> Loại -> Trạng thái (xem `dateScoped` +
+   `groupCountsScoped` bên dưới) — mọi số đếm sidebar phản ánh đúng khoảng
+   ngày đang chọn. Riêng KPI đầu trang ("Loại yêu cầu nhiều nhất"/"Nhóm nhiều
+   ticket nhất") CỐ Ý giữ nguyên toàn cục, không theo ngày (đúng thiết kế gốc
+   — bấm vào 2 thẻ đó để nhảy sang top TOÀN THỜI GIAN).
+
+   08/09/2026 — thêm nút "⬇ Tải dữ liệu" (ExportMenu): xuất đúng danh sách
+   ticket đang khớp bộ lọc hiện tại (`filtered` — KHÔNG bị giới hạn hiển thị
+   200 dòng như `shown`), chọn được CSV hoặc Excel (.xlsx, mở/nhập được vào
+   Google Sheets). Dùng 2 hàm xuất tổng quát ở src/lib/exportExcel.ts.
    ============================================================ */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadTickets, TICKET_CATEGORIES, type Ticket, type TicketData, type TicketCategory } from "../lib/ticket";
@@ -33,6 +43,7 @@ import { REFRESH_MS } from "../config";
 import { normSearch } from "../lib/normalize";
 import { useMyRole } from "../lib/usePermissions";
 import { getUser } from "../lib/useUser";
+import { exportRowsCsv, exportRowsXlsx } from "../lib/exportExcel";
 import {
   loadTicketStatus, setTicketStatus, addTicketNote, TICKET_STATUS_META,
   type TicketStatusData, type TicketStatusValue, type TicketStatusRow, type TicketNote,
@@ -70,6 +81,13 @@ const CATEGORY_META: Record<TicketCategory, { icon: string; short: string; cls: 
 function fmtTime(d: Date): string {
   const p2 = (n: number) => String(n).padStart(2, "0");
   return `${p2(d.getDate())}/${p2(d.getMonth() + 1)} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+}
+
+/* 08/09/2026 — mốc giờ ĐẦY ĐỦ (kèm năm + giây) cho file xuất — khác fmtTime() ở trên (rút gọn,
+   dùng để HIỂN THỊ trên thẻ ticket, bỏ năm/giây cho gọn màn hình). */
+function fmtTimeFull(d: Date): string {
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return `${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
 }
 
 /* 07/09/2026 (khuya, lần 3) — helper cho bộ lọc theo ngày. So sánh theo NGÀY LỊCH (giờ máy
@@ -170,6 +188,71 @@ function DateRangeFilter({
             <button type="button" className="clear" onClick={() => { onApply("", ""); setOpen(false); }}>✕ Bỏ lọc ngày</button>
             <button type="button" className="done" onClick={() => { onApply(from, to); setOpen(false); }}>Áp dụng</button>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const EXPORT_HEADER = ["Thời gian", "Nhóm Telegram", "Loại yêu cầu", "Trạng thái", "Mã ticket", "Người gửi", "Nội dung", "Số phản hồi"];
+
+/** 1 ticket -> 1 hàng xuất file (thứ tự đúng EXPORT_HEADER ở trên). */
+function ticketToExportRow(t: Ticket, statusRow?: TicketStatusRow): (string | number)[] {
+  const eff = effectiveStatus(t, statusRow);
+  const statusLabel = t.autoClosed ? CLOSED_META.label : TICKET_STATUS_META[eff as TicketStatusValue]?.label || eff;
+  return [fmtTimeFull(t.time), t.groupName, CATEGORY_META[t.category]?.short || t.category, statusLabel, t.ticketCode || "", t.sender || "", t.content || "", t.replies.length];
+}
+
+/** Nút "⬇ Tải dữ liệu" — xuất ĐÚNG danh sách ticket đang khớp bộ lọc hiện tại (`rows`), chọn
+ *  CSV hoặc Excel. Tên file tự ghép theo bộ lọc đang áp dụng (`filenameHint`) cho dễ phân biệt
+ *  nếu Sếp tải nhiều lần với bộ lọc khác nhau. */
+function ExportMenu({
+  rows, statusData, filenameHint,
+}: {
+  rows: Ticket[];
+  statusData: TicketStatusData | null;
+  filenameHint: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  function buildRows(): (string | number)[][] {
+    return rows.map((t) => ticketToExportRow(t, statusData?.status[t.id]));
+  }
+
+  function doCsv() {
+    exportRowsCsv(EXPORT_HEADER, buildRows(), filenameHint);
+    setOpen(false);
+  }
+  function doXlsx() {
+    exportRowsXlsx(EXPORT_HEADER, buildRows(), filenameHint, "Ticket Vận Tải");
+    setOpen(false);
+  }
+
+  return (
+    <div className="ticket-date-filter" ref={boxRef}>
+      <button type="button" className="xlsx-btn" onClick={() => setOpen((v) => !v)} disabled={rows.length === 0}>
+        ⬇ Tải dữ liệu ({rows.length.toLocaleString("vi-VN")})
+      </button>
+      {open && (
+        <div className="ticket-date-pop ticket-export-pop">
+          <div className="ticket-side-title" style={{ padding: "0 0 6px" }}>Chọn loại file</div>
+          <div className="ticket-date-presets">
+            <button type="button" onClick={doCsv}>📄 CSV (.csv)</button>
+            <button type="button" onClick={doXlsx}>📊 Excel (.xlsx)</button>
+          </div>
+          <p className="lead" style={{ margin: "6px 2px 0", fontSize: 11.5 }}>
+            Mẹo: mở Google Sheets → File → Nhập, chọn file vừa tải (CSV hoặc Excel đều nhập được).
+          </p>
         </div>
       )}
     </div>
@@ -375,6 +458,17 @@ export function TicketVanTai() {
   const statusScopeTotalOpenish = (["open", "in_progress", "done"] as StatusFilterValue[])
     .reduce((sum, s) => sum + (statusCountsInScope.get(s) || 0), 0);
 
+  // 08/09/2026 — tên file gợi ý cho nút "Tải dữ liệu": ghép các bộ lọc ĐANG áp dụng để dễ phân
+  // biệt nếu Sếp tải nhiều lần với phạm vi khác nhau; không có bộ lọc nào -> chỉ "Ticket_VanTai".
+  const exportFilenameHint = useMemo(() => {
+    const parts = ["Ticket_VanTai"];
+    if (group) parts.push(group);
+    if (category) parts.push(CATEGORY_META[category as TicketCategory]?.short || category);
+    if (statusFilter) parts.push(statusFilter === "closed" ? "Dong" : TICKET_STATUS_META[statusFilter as TicketStatusValue]?.label || statusFilter);
+    if (dateFrom || dateTo) parts.push(`${dateFrom || "..."}_${dateTo || "..."}`);
+    return parts.join("_");
+  }, [group, category, statusFilter, dateFrom, dateTo]);
+
   // Chọn nhóm ở cột 1 -> luôn reset loại ở cột 2 (danh sách loại có thể đã đổi hẳn).
   function pickGroup(g: string) {
     setGroup(g);
@@ -499,6 +593,7 @@ export function TicketVanTai() {
                     <input placeholder="Tìm nội dung/người gửi…" value={q} onChange={(e) => setQ(e.target.value)} />
                   </div>
                   <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onApply={(f, t) => { setDateFrom(f); setDateTo(t); }} />
+                  <ExportMenu rows={filtered} statusData={statusData} filenameHint={exportFilenameHint} />
                   <span className="lead" style={{ alignSelf: "center" }}>
                     {hasFilter ? `${shown.length} / ${filtered.length} ticket khớp` : `Đang hiện ${shown.length} ticket mới nhất / ${filtered.length} tổng — lọc để xem hết`}
                   </span>
