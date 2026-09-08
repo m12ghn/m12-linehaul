@@ -53,8 +53,15 @@ export type AddonTripTicketPatch = Partial<Pick<AddonTripTicket,
   "thu_tu_diem" | "warehouse" | "tao_app_trigger" | "da_tao_app"
 >>;
 
-export async function loadTicketXtc(scope: TicketXtcScope, signal?: AbortSignal): Promise<AddonTripTicket[]> {
-  const r = await fetch("/api/ticket-xtc?scope=" + scope, { signal, cache: "no-store" });
+export interface TicketXtcDateRange { from: string; to: string; } // "YYYY-MM-DD" (giờ VN)
+
+/** range tuỳ chọn — không truyền thì API trả toàn bộ (không lọc ngày). UI luôn
+ *  truyền range (mặc định "2 ngày gần nhất") để tránh kéo hết lịch sử mỗi lần mở trang. */
+export async function loadTicketXtc(scope: TicketXtcScope, range?: TicketXtcDateRange, signal?: AbortSignal): Promise<AddonTripTicket[]> {
+  const p = new URLSearchParams({ scope });
+  if (range?.from) p.set("from", range.from);
+  if (range?.to) p.set("to", range.to);
+  const r = await fetch("/api/ticket-xtc?" + p.toString(), { signal, cache: "no-store" });
   const d = await r.json();
   if (!d?.ok) throw new Error(d?.error || "load_failed");
   return (d.rows || []) as AddonTripTicket[];

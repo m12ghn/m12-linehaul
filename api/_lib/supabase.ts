@@ -31,8 +31,11 @@ function must(name: string): string {
 export interface QueryOpts {
   /** Cột trả về, cú pháp PostgREST: "id,code,stops(*)" */
   select?: string;
-  /** Bộ lọc thô: { region_key: "eq.noi-thanh-hcm", ngay: "gte.2026-08-01" } */
-  filter?: Record<string, string>;
+  /** Bộ lọc thô: { region_key: "eq.noi-thanh-hcm", ngay: "gte.2026-08-01" }.
+   *  Giá trị có thể là mảng để lọc CÙNG 1 cột nhiều điều kiện (PostgREST AND
+   *  theo query param lặp lại) — vd khoảng ngày: { created_at: ["gte.2026-09-06",
+   *  "lte.2026-09-08"] }. Thêm 09/2026 cho bộ lọc date-range của ticket-xtc.ts. */
+  filter?: Record<string, string | string[]>;
   order?: string;
   limit?: number;
   /** Email người thao tác -> vào audit_log qua biến phiên m12.actor. */
@@ -77,7 +80,10 @@ export class SupabaseError extends Error {
 function qs(o: QueryOpts): string {
   const p = new URLSearchParams();
   if (o.select) p.set("select", o.select);
-  for (const [k, v] of Object.entries(o.filter || {})) p.append(k, v);
+  for (const [k, v] of Object.entries(o.filter || {})) {
+    if (Array.isArray(v)) { for (const vi of v) p.append(k, vi); }
+    else p.append(k, v);
+  }
   if (o.order) p.set("order", o.order);
   if (o.limit) p.set("limit", String(o.limit));
   const s = p.toString();

@@ -7,13 +7,19 @@
    CỐ Ý TÁCH BIỆT HOÀN TOÀN với bảng `tickets` (project tai-tang-cuong-vercel):
    bảng `addon_trip_ticket` không FK, không join gì tới bảng đó.
 
-   GET  /api/ticket-xtc?scope=noi-thanh|noi-vung|all
+   GET  /api/ticket-xtc?scope=noi-thanh|noi-vung|all&from=YYYY-MM-DD&to=YYYY-MM-DD
      -> { ok, rows: AddonTripTicket[] }
      ĐỌC MỞ (không cần đăng nhập) — cùng lý do api/tickets.ts: trang mới dựng
      khung, chưa có gì nhạy cảm hơn dữ liệu vận hành đang hiện công khai trên
      Sheet cho GSVT xem hằng ngày.
      scope lọc theo `region`: "noi-thanh" = Hồ Chí Minh, "noi-vung" = còn lại,
      "all"/không truyền = không lọc.
+     from/to (09/2026) lọc theo `created_at` (giờ VN +07:00), CẢ HAI tuỳ chọn —
+     thiếu 1 trong 2 thì chỉ chặn 1 phía. Client (TicketXinTangCuong.tsx) luôn
+     gửi cả 2, mặc định "2 ngày gần nhất", để tránh kéo cả 3700+ dòng lịch sử
+     mỗi lần mở trang. Dùng selectAll() (không giới hạn 500 như trước) vì với
+     bộ lọc ngày hẹp, số dòng khớp thường nhỏ — còn khi user nới rộng khoảng
+     ngày thì vẫn cần trả đủ, không âm thầm cắt bớt.
      select("*") nên tự động trả về CẢ các cột bổ sung ở 0009 (note, ve_ktc,
      da_thong_bao_tele, bl, blacklist, hinh_kho) khi client cần hiển thị đủ
      layout giống sheet gốc — không cần sửa gì thêm ở đây khi thêm cột mới.
@@ -23,7 +29,7 @@
      được sửa trên UI (whitelist EDITABLE_FIELDS bên dưới) — chặn client gửi
      đè các cột gốc (region, lo_trinh, msnv...) vốn thuộc về luồng đăng ký.
    ============================================================ */
-import { select, update, json, SupabaseError } from "./_lib/supabase";
+import { selectAll, update, json, SupabaseError } from "./_lib/supabase";
 import { guard } from "./_lib/session";
 
 export const config = { runtime: "edge" };
@@ -40,21 +46,34 @@ const EDITABLE_FIELDS = [
   "thu_tu_diem", "warehouse", "tao_app_trigger", "da_tao_app",
 ] as const;
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 function scopeFilter(scope: string | null): Record<string, string> {
   if (scope === "noi-thanh") return { region: "eq.Hồ Chí Minh" };
   if (scope === "noi-vung") return { region: "not.eq.Hồ Chí Minh" };
   return {};
 }
 
+/** from/to dạng "YYYY-MM-DD" (giờ VN) -> điều kiện created_at gte/lte. Sai
+ *  format thì bỏ qua (không lọc phía đó) thay vì để PostgREST trả 400 khó hiểu. */
+function dateRangeFilter(from: string | null, to: string | null): string[] {
+  const cond: string[] = [];
+  if (from && DATE_RE.test(from)) cond.push("gte." + from + "T00:00:00+07:00");
+  if (to && DATE_RE.test(to)) cond.push("lte." + to + "T23:59:59+07:00");
+  return cond;
+}
+
 export default async function handler(req: Request): Promise<Response> {
   try {
     if (req.method === "GET") {
       const u = new URL(req.url);
-      const rows = await select("addon_trip_ticket", {
+      const created = dateRangeFilter(u.searchParams.get("from"), u.searchParams.get("to"));
+      const filter: Record<string, string | string[]> = { ...scopeFilter(u.searchParams.get("scope")) };
+      if (created.length) filter.created_at = created;
+      const rows = await selectAll("addon_trip_ticket", {
         select: "*",
-        filter: scopeFilter(u.searchParams.get("scope")),
+        filter,
         order: "created_at.desc",
-        limit: 500,
       });
       return json({ ok: true, rows });
     }

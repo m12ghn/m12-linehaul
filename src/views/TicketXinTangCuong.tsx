@@ -20,6 +20,19 @@
    không còn input rải rác theo cột nữa; nhóm GSVT phản hồi + bot ad hoc gộp
    lại thành 1 nút "✏️ Nhập/Sửa" mở modal (khung trống điền thông tin, đúng ý
    "ko cần theo cột; làm nút hoặc khung trống để điền").
+
+   09/2026 (v3) — thêm 2 bộ lọc theo yêu cầu:
+   - "Ẩn ticket đã duyệt" (mặc định BẬT — ẩn): định nghĩa "đã duyệt" = đã có
+     Trạng thái (trang_thai khác rỗng), tức GSVT đã phản hồi/xử lý xong, bất
+     kể kết quả (Có xe/Không có xe/Hủy…) — vì mục đích lọc là giảm rối, tập
+     trung vào ticket CÒN CẦN xử lý. Lọc client-side trên rows đã tải (không
+     cần gọi lại API). Có toggle để hiện lại khi cần soát lịch sử.
+   - Khoảng ngày (mặc định "2 ngày gần nhất") lọc theo created_at — chuyển
+     xuống tầng API (xem api/ticket-xtc.ts + loadTicketXtc) để KHÔNG kéo hết
+     3700+ dòng lịch sử mỗi lần mở trang; đổi ngày -> gọi lại API.
+   Đồng thời fix khung bảng cao cố định + cuộn dọc RIÊNG bên trong khung (xem
+   .xtc-scroll trong index.css) — trước đó bảng dài hết theo số dòng nên phải
+   cuộn hết trang xuống dưới cùng mới thấy thanh cuộn ngang.
    ============================================================ */
 import { useEffect, useMemo, useState } from "react";
 import { usePersistentState } from "../lib/usePersistent";
@@ -27,6 +40,18 @@ import { useMyRole } from "../lib/usePermissions";
 import { loadTicketXtc, saveTicketXtc, type AddonTripTicket, type AddonTripTicketPatch, type TicketXtcScope } from "../lib/ticketXtc";
 
 const MODULE = "ticket-xtc";
+
+/** "YYYY-MM-DD" theo giờ máy người dùng (đội vận hành đều ở VN +07:00). */
+function toDateStr(d: Date): string {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+/** Mặc định "2 ngày gần nhất" = hôm qua -> hôm nay. */
+function defaultDateRange(): { from: string; to: string } {
+  const today = new Date();
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  return { from: toDateStr(yesterday), to: toDateStr(today) };
+}
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "—";
@@ -165,10 +190,15 @@ export function TicketXinTangCuong() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<AddonTripTicket | null>(null);
 
-  async function reload(scope: TicketXtcScope) {
+  // Bộ lọc: "Ẩn đã duyệt" nhớ theo trình duyệt (usePersistentState) vì là gu xem của
+  // từng người; khoảng ngày KHÔNG nhớ — luôn mở lại đúng mặc định "2 ngày gần nhất".
+  const [hideApproved, setHideApproved] = usePersistentState<boolean>("xtc.hideApproved", true);
+  const [dateRange, setDateRange] = useState(defaultDateRange);
+
+  async function reload(scope: TicketXtcScope, range: { from: string; to: string }) {
     setLoading(true); setError(null);
     try {
-      const r = await loadTicketXtc(scope);
+      const r = await loadTicketXtc(scope, range);
       setRows(r);
     } catch (e: any) {
       setError(e?.message === "unauthorized" ? "Cần đăng nhập để xem danh sách." : "Không tải được danh sách — thử lại.");
@@ -178,20 +208,25 @@ export function TicketXinTangCuong() {
   }
 
   useEffect(() => {
-    if (sub === "noi-thanh") reload("noi-thanh");
+    if (sub === "noi-thanh") reload("noi-thanh", dateRange);
     // "noi-vung" chưa gọi API — xem placeholder bên dưới.
-  }, [sub]);
+  }, [sub, dateRange.from, dateRange.to]);
 
   function onSaved(updated: AddonTripTicket) {
     setRows((rs) => (rs || []).map((r) => (r.ticket_id === updated.ticket_id ? updated : r)));
     setEditing(null);
   }
 
+  const visibleRows = useMemo(() => {
+    if (!rows) return null;
+    return hideApproved ? rows.filter((r) => !r.trang_thai) : rows;
+  }, [rows, hideApproved]);
+
   const summary = useMemo(() => {
     if (!rows) return null;
-    const chua = rows.filter((r) => !r.trang_thai || r.trang_thai === "cho-duyet").length;
+    const daDuyet = rows.filter((r) => !!r.trang_thai).length;
     const daTaoApp = rows.filter((r) => r.tao_app_trigger).length;
-    return { tong: rows.length, chua, daTaoApp };
+    return { tong: rows.length, daDuyet, chua: rows.length - daDuyet, daTaoApp };
   }, [rows]);
 
   return (
@@ -216,7 +251,8 @@ export function TicketXinTangCuong() {
             </p>
             {summary && (
               <p style={{ fontSize: 14, color: "var(--muted)" }}>
-                Tổng <b>{summary.tong}</b> ticket · <b>{summary.chua}</b> chưa duyệt · <b>{summary.daTaoApp}</b> đã bật cờ "Tạo App"
+                Tổng <b>{summary.tong}</b> ticket (trong khoảng ngày đã chọn) · <b>{summary.chua}</b> chưa duyệt ·{" "}
+                <b>{summary.daDuyet}</b> đã duyệt{hideApproved ? " (đang ẩn)" : ""} · <b>{summary.daTaoApp}</b> đã bật cờ "Tạo App"
               </p>
             )}
             {!canEdit && (
@@ -224,21 +260,47 @@ export function TicketXinTangCuong() {
                 🔒 Vai trò của bạn chưa có quyền <b>Sửa</b> mục này — chỉ xem được, không nhập/sửa được.
               </p>
             )}
-            <button className="btn-ghost" onClick={() => reload("noi-thanh")} disabled={loading}>
-              {loading ? "Đang tải…" : "🔄 Tải lại"}
-            </button>
+
+            <div className="xtc-filters">
+              <label className="xtc-hide-approved">
+                <input type="checkbox" checked={hideApproved} onChange={(e) => setHideApproved(e.target.checked)} />
+                Ẩn ticket đã duyệt
+              </label>
+              <label className="xtc-daterange">
+                Từ
+                <input type="date" className="pl-in" value={dateRange.from} max={dateRange.to}
+                  onChange={(e) => setDateRange((r) => ({ ...r, from: e.target.value }))} />
+              </label>
+              <label className="xtc-daterange">
+                đến
+                <input type="date" className="pl-in" value={dateRange.to} min={dateRange.from}
+                  onChange={(e) => setDateRange((r) => ({ ...r, to: e.target.value }))} />
+              </label>
+              <button className="btn-ghost sm" onClick={() => setDateRange(defaultDateRange())} disabled={loading}>
+                2 ngày gần nhất
+              </button>
+              <button className="btn-ghost" onClick={() => reload("noi-thanh", dateRange)} disabled={loading}>
+                {loading ? "Đang tải…" : "🔄 Tải lại"}
+              </button>
+            </div>
           </div>
 
           {error && <div className="section-card" style={{ color: "var(--red, #c0392b)" }}>{error}</div>}
 
           {!error && rows && rows.length === 0 && (
             <div className="section-card" style={{ textAlign: "center", color: "var(--muted)" }}>
-              Chưa có ticket nào trong bảng — nạp dữ liệu mẫu 1 lần để bắt đầu dựng/kiểm thử giao diện.
+              Không có ticket nào trong khoảng ngày đã chọn — thử nới rộng khoảng ngày, hoặc "Tải lại" nếu vừa nạp dữ liệu mẫu.
             </div>
           )}
 
-          {!error && rows && rows.length > 0 && (
-            <div className="section-card rt-wrap">
+          {!error && rows && rows.length > 0 && visibleRows && visibleRows.length === 0 && (
+            <div className="section-card" style={{ textAlign: "center", color: "var(--muted)" }}>
+              {summary?.tong} ticket trong khoảng ngày này đều đã duyệt — đang bị ẩn bởi bộ lọc "Ẩn ticket đã duyệt" ở trên.
+            </div>
+          )}
+
+          {!error && visibleRows && visibleRows.length > 0 && (
+            <div className="section-card xtc-scroll">
               <table className="re-stops xtc-table">
                 <thead>
                   <tr>
@@ -281,7 +343,7 @@ export function TicketXinTangCuong() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((t) => (
+                  {visibleRows.map((t) => (
                     <tr key={t.ticket_id}>
                       <td><RoCell value={fmtTime(t.created_at)} /></td>
                       <td><RoCell value={t.ticket_id} /></td>
@@ -324,8 +386,9 @@ export function TicketXinTangCuong() {
                 </tbody>
               </table>
               <p className="rt-note">
-                Cập nhật gần nhất: {rows[0] ? fmtTime(rows[0].updated_at) : "—"} · Bấm <b>✏️ Nhập/Sửa</b> ở cuối mỗi dòng để GSVT nhập
-                trạng thái, BKS, tài xế… và phần bot Playwright ad hoc — các cột còn lại (đăng ký gốc + tự động) chỉ xem, không sửa qua bảng.
+                Đang hiện <b>{visibleRows.length}</b>/{summary?.tong ?? visibleRows.length} ticket (khoảng ngày đã chọn{hideApproved ? ", đã ẩn ticket đã duyệt" : ""}).
+                Bấm <b>✏️ Nhập/Sửa</b> ở cuối mỗi dòng để GSVT nhập trạng thái, BKS, tài xế… và phần bot Playwright ad hoc — các cột còn
+                lại (đăng ký gốc + tự động) chỉ xem, không sửa qua bảng.
               </p>
             </div>
           )}
