@@ -136,30 +136,17 @@ export function TlldTuyen({
   const { index, loading, error, refresh } = useTlld();
   const allRoutes = useAllRoutes(); // lịch toàn vùng (realtime) để khớp lộ trình + tải trọng
 
-  // Mã tuyến thuộc phạm vi đang xem — dùng để LỌC khung "🩺 Sức khoẻ vận hành TLLD" (Sếp yêu cầu
-  // 01/09: đổi tab vùng phải đổi số). Bình thường lấy từ `data.routes` của vùng/tab Lịch Tải đang
-  // chọn; ở tab "🌐 Toàn hub LM12SC" (hubMode) lấy thẳng các mã tuyến có hub===LM12SC trong index
-  // TLLD toàn cục — KHÔNG phụ thuộc Sheet nào (đúng ý "tách biệt hoàn toàn với 4 tab cũ").
-  const hubCodes = useMemo(() => {
-    const s = new Set<string>();
-    if (!hubMode || !index) return s;
-    for (const [code, r] of index.byCode) if (r.hub === HUB_LM12SC) s.add(code);
-    return s;
-  }, [hubMode, index]);
-  const regionCodes = useMemo(
-    () => (hubMode ? hubCodes : new Set(data.routes.map((r) => normCode(r.route)).filter(Boolean))),
-    [hubMode, hubCodes, data.routes]
-  );
-  const { index: regionIndex } = useTlldRegion(regionCodes);
-
   // ============================================================================================
   // BỘ LỌC "TRA CỨU" (khoảng ngày từ-đến + mã tuyến + mã chuyến) — thêm 03/09/2026, THAY HẲN ô tìm
-  // kiếm chung cũ của trang này (Sếp chọn qua AskUserQuestion: "Thay hẳn ô tìm kiếm cũ"). CHỈ DÙNG
-  // ĐỂ TRA CỨU (phương án khuyến nghị Sếp chọn) — TÁCH RIÊNG hoàn toàn khỏi index/regionIndex ở
-  // trên: khung "🩺 Sức khoẻ vận hành TLLD", KPI vùng, và danh sách 2 cột cảnh báo bên dưới VẪN
-  // tính như cũ (cuốn chiếu quanh "hôm nay", KHÔNG đổi theo bộ lọc này). Bộ lọc gọi RIÊNG
+  // kiếm chung cũ của trang này (Sếp chọn qua AskUserQuestion: "Thay hẳn ô tìm kiếm cũ").
+  // ⚠ 08/09: BAN ĐẦU tách riêng hoàn toàn khỏi khung "🩺 Sức khoẻ vận hành TLLD" (chỉ dùng để tra
+  // cứu/xem chi tiết 1 chuyến). Sếp phản hồi lại cùng ngày: "scorecard khi có filter lọc thì cũng
+  // phải được apply" -> đổi lại: có bộ lọc nào đang áp (ngày/mã tuyến/mã chuyến/BSX/band/nguồn khớp)
+  // thì khung Sức khoẻ CHỈ tính trên các TUYẾN xuất hiện trong kết quả tra cứu đã lọc (xem
+  // regionCodes/regionCodesLoc bên dưới, sau khối này) — áp dụng cho CẢ 5 tab. Bộ lọc gọi RIÊNG
   // fetchTlldRange() (1 lần gọi /api/tlld-live?tu=&den= mỗi lần tra cứu), dựng 1 khu vực kết quả
-  // RIÊNG bên dưới — không ghi đè rows/columns/withData mà các khung phía trên đang dùng.
+  // RIÊNG bên dưới (rows/columns/withData của khung KPI + 2 cột cảnh báo browsing thì VẪN như cũ,
+  // không đổi theo bộ lọc này — chỉ riêng Sức khoẻ mới lọc theo).
   // ============================================================================================
   const [fFrom, setFFrom] = useState("");
   const [fTo, setFTo] = useState("");
@@ -262,6 +249,38 @@ export function TlldTuyen({
       setDiemLoading(false);
     }
   }
+
+  // Mã tuyến thuộc phạm vi đang xem — dùng để LỌC khung "🩺 Sức khoẻ vận hành TLLD" (Sếp yêu cầu
+  // 01/09: đổi tab vùng phải đổi số). Bình thường lấy từ `data.routes` của vùng/tab Lịch Tải đang
+  // chọn; ở tab "🌐 Toàn hub LM12SC" (hubMode) lấy thẳng các mã tuyến có hub===LM12SC trong index
+  // TLLD toàn cục — KHÔNG phụ thuộc Sheet nào (đúng ý "tách biệt hoàn toàn với 4 tab cũ").
+  const hubCodes = useMemo(() => {
+    const s = new Set<string>();
+    if (!hubMode || !index) return s;
+    for (const [code, r] of index.byCode) if (r.hub === HUB_LM12SC) s.add(code);
+    return s;
+  }, [hubMode, index]);
+  const regionCodes = useMemo(
+    () => (hubMode ? hubCodes : new Set(data.routes.map((r) => normCode(r.route)).filter(Boolean))),
+    [hubMode, hubCodes, data.routes]
+  );
+  // Thu hẹp regionCodes theo bộ lọc "Tra cứu" đang áp (thêm 08/09, Sếp yêu cầu khung Sức khoẻ cũng
+  // phải "apply" filter) — lấy tập mã tuyến XUẤT HIỆN trong lookupRows (đã lọc đủ ngày/mã tuyến/mã
+  // chuyến/BSX/band/nguồn khớp ở runLookup phía trên), giao với regionCodes của vùng/tab đang xem.
+  // Chưa bấm lọc gì (lookupTouched=false) hoặc đang tải/lookupRows chưa về (null) -> GIỮ NGUYÊN
+  // regionCodes đầy đủ, tránh khung Sức khoẻ nhấp nháy rỗng trong lúc chờ. Lọc xong mà 0 chuyến khớp
+  // -> trả Set rỗng, khung Sức khoẻ tự ẩn (TlldSucKhoe trả null khi index null) kèm dòng ghi chú bên
+  // dưới (xem chỗ render "Sức khoẻ vận hành TLLD" ở JSX chính).
+  const regionCodesLoc = useMemo(() => {
+    if (!lookupTouched || !lookupRows) return regionCodes;
+    const s = new Set<string>();
+    for (const r of lookupRows) {
+      const c = normCode(r.maTuyen);
+      if (c && regionCodes.has(c)) s.add(c);
+    }
+    return s;
+  }, [lookupTouched, lookupRows, regionCodes]);
+  const { index: regionIndex } = useTlldRegion(regionCodesLoc);
 
   // ============================================================================================
   // Danh sách tuyến theo VÙNG + LOẠI TUYẾN đang chọn (KPI + 2 cột cảnh báo) — KHÔNG lọc theo bộ lọc
@@ -475,9 +494,16 @@ export function TlldTuyen({
       {/* SỨC KHOẺ VẬN HÀNH TLLD — LỌC THEO VÙNG đang chọn (regionIndex, đổi theo sheetKey/tab —
           Sếp yêu cầu 01/09), KHÔNG còn xem toàn cụm như bản đầu. Ở hubMode lọc theo hubCodes (toàn
           hub LM12SC) thay vì vùng Sheet. Xem src/components/TlldSucKhoe.tsx + useTlldRegion() ở
-          lib/useTlld.ts. KHÔNG bị ảnh hưởng bởi bộ lọc Tra cứu ở trên (03/09 — chỉ dùng để tra
-          cứu, không đụng khung này). */}
-      <TlldSucKhoe index={regionIndex} />
+          lib/useTlld.ts. Có bộ lọc Tra cứu đang áp (lookupTouched) -> regionIndex CHỈ tính trên các
+          tuyến khớp bộ lọc (regionCodesLoc, xem khối tính ở trên) — thêm 08/09, Sếp yêu cầu khung
+          này cũng phải "apply" theo filter, không tách riêng như bản đầu (03/09) nữa. */}
+      {lookupTouched && lookupRows && regionCodesLoc.size === 0 ? (
+        <div className="tlld-empty" style={{ marginTop: 12 }}>
+          🩺 Không có tuyến nào khớp bộ lọc Tra cứu để tính Sức khoẻ vận hành TLLD.
+        </div>
+      ) : (
+        <TlldSucKhoe index={regionIndex} />
+      )}
 
       {/* Ẩn ở hubMode: tab "🌐 Toàn hub LM12SC" gộp TOÀN BỘ tuyến của hub, không tách theo loại
           tuyến (Sếp yêu cầu — tách biệt hoàn toàn với 4 tab vùng cũ, vốn vẫn giữ CategoryTabs). */}
