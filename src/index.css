@@ -291,6 +291,11 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 .tlld-lookup-f input:focus, .tlld-lookup-f select:focus { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(255, 82, 0, .1); }
 .tlld-lookup-f input[type="text"] { min-width: 150px; }
 .tlld-lookup-f select { min-width: 120px; cursor: pointer; }
+/* "Nguồn khớp" (checkbox multi-choice, thêm 08/09) — cùng khung .tlld-lookup-f nhưng nội dung là
+   hàng checkbox thay vì input/select đơn. */
+.tlld-lookup-nguon-opts { display: flex; gap: 10px; align-items: center; padding: 9px 12px; border: 1.5px solid var(--line-2); border-radius: 10px; background: var(--white); }
+.tlld-lookup-nguon-opts label { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; color: var(--ink, #222); cursor: pointer; white-space: nowrap; }
+.tlld-lookup-nguon-opts input[type="checkbox"] { cursor: pointer; }
 .tlld-lookup-results-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .tlld-lookup-results .tc-grid tbody tr { cursor: pointer; }
 

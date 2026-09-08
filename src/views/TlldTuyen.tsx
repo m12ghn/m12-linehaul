@@ -97,6 +97,19 @@ const TLLD_BANDS: { key: string; label: string; test: (v: number) => boolean }[]
   { key: "50+", label: "> 50%", test: (v) => v > 0.50 },
 ];
 
+/** "Nguồn khớp" — Sếp yêu cầu 08/09: lọc chuyến ở tab "🌐 Toàn hub LM12SC" theo ĐÚNG 3 điều kiện OR
+ *  đang dùng ở qualifying_trips (api/_lib/tlldQuery.ts): hub='LM12SC', hoặc đi qua kho Tân Tạo/Tân
+ *  Thuận. Multiple choice — chọn nhiều thì OR (khớp ít nhất 1 trong các mục đã chọn).
+ *  ⚠ Cùng giới hạn với cột "hub"/"kho_dau" đã có từ trước: view tlld_trip chỉ giữ ĐIỂM DỪNG ĐẦU TIÊN
+ *  của mỗi chuyến làm đại diện (xem 0005_tlld_trip_view.sql), nên "Tân Tạo"/"Tân Thuận" ở đây nghĩa
+ *  là "điểm dừng ĐẦU của chuyến là kho đó" — KHÔNG phải "chuyến có ghé qua kho đó ở bất kỳ điểm nào
+ *  dọc đường". Muốn đúng "bất kỳ điểm nào" phải thêm cột ở tầng SQL/view, chưa làm ở lần này. */
+const NGUON_KHOP_DEFS: { key: string; label: string; test: (r: TlldRangeRow) => boolean }[] = [
+  { key: "hub", label: "LM12SC (hub)", test: (r) => r.hub === HUB_LM12SC },
+  { key: "tantao", label: "Tân Tạo", test: (r) => normSearch(r.khoDau).includes("tan tao") },
+  { key: "tanthuan", label: "Tân Thuận", test: (r) => normSearch(r.khoDau).includes("tan thuan") },
+];
+
 export function TlldTuyen({
   data,
   regionLabel,
@@ -162,12 +175,22 @@ export function TlldTuyen({
   const [fBsx, setFBsx] = useState("");
   const [fBand, setFBand] = useState(""); // "" = không lọc nhóm; khác thì là band.key ở TLLD_BANDS
   const [fMetric, setFMetric] = useState<"weight" | "vol">("weight");
+  // "Nguồn khớp" (thêm 08/09) — CHỈ áp dụng/hiện ở hubMode (tab "🌐 Toàn hub LM12SC"), không có ý
+  // nghĩa ở 4 tab vùng cũ (đã lọc theo Sheet route rồi). Set rỗng = không lọc (như các ô khác).
+  const [fNguon, setFNguon] = useState<Set<string>>(new Set());
+  function toggleNguon(key: string) {
+    setFNguon((prev) => {
+      const s = new Set(prev);
+      if (s.has(key)) s.delete(key); else s.add(key);
+      return s;
+    });
+  }
   const [lookupRows, setLookupRows] = useState<TlldRangeRow[] | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupErr, setLookupErr] = useState<string | null>(null);
-  const lookupTouched = !!(fFrom || fTo || fMaTuyen.trim() || fMaChuyen.trim() || fBsx.trim() || fBand);
+  const lookupTouched = !!(fFrom || fTo || fMaTuyen.trim() || fMaChuyen.trim() || fBsx.trim() || fBand || fNguon.size);
 
-  async function runLookup(over?: { from?: string; to?: string; maTuyen?: string; maChuyen?: string; bsx?: string; band?: string; metric?: "weight" | "vol" }) {
+  async function runLookup(over?: { from?: string; to?: string; maTuyen?: string; maChuyen?: string; bsx?: string; band?: string; metric?: "weight" | "vol"; nguon?: Set<string> }) {
     const from = over?.from ?? fFrom;
     const to = over?.to ?? fTo;
     const maTuyen = over?.maTuyen ?? fMaTuyen;
@@ -175,7 +198,8 @@ export function TlldTuyen({
     const bsx = over?.bsx ?? fBsx;
     const band = over?.band ?? fBand;
     const metric = over?.metric ?? fMetric;
-    if (!from && !to && !maTuyen.trim() && !maChuyen.trim() && !bsx.trim() && !band) {
+    const nguon = over?.nguon ?? fNguon;
+    if (!from && !to && !maTuyen.trim() && !maChuyen.trim() && !bsx.trim() && !band && !nguon.size) {
       setLookupRows(null); setLookupErr(null); return;
     }
     setLookupLoading(true); setLookupErr(null);
@@ -197,6 +221,8 @@ export function TlldTuyen({
           const v = metric === "weight" ? r.tlldWeight : r.tlldVol;
           if (v == null || !bandDef.test(v)) return false;
         }
+        // "Nguồn khớp" — multiple choice, OR: khớp ít nhất 1 mục đã chọn.
+        if (nguon.size && !NGUON_KHOP_DEFS.some((d) => nguon.has(d.key) && d.test(r))) return false;
         return true;
       });
       out = out.sort((a, b) => b.ngay.localeCompare(a.ngay) || a.maChuyen.localeCompare(b.maChuyen));
@@ -210,12 +236,14 @@ export function TlldTuyen({
   }
   function clearLookup() {
     setFFrom(""); setFTo(""); setFMaTuyen(""); setFMaChuyen(""); setFBsx(""); setFBand("");
+    setFNguon(new Set());
     setLookupRows(null); setLookupErr(null);
   }
   // Bấm chip "Tuyến lấp đầy <60%" ở KPI (bên dưới) -> tra cứu NGAY tuyến đó, mặc định 30 ngày gần nhất.
   function lookupRouteChip(code: string) {
     setFMaTuyen(code); setFMaChuyen(""); setFFrom(""); setFTo(""); setFBsx(""); setFBand("");
-    runLookup({ maTuyen: code, maChuyen: "", from: "", to: "", bsx: "", band: "" });
+    setFNguon(new Set());
+    runLookup({ maTuyen: code, maChuyen: "", from: "", to: "", bsx: "", band: "", nguon: new Set() });
   }
 
   // Đúng 1 chuyến khớp bộ lọc -> coi là "đang tra 1 chuyến cụ thể", hiện thẻ chi tiết FULL TRIP.
@@ -425,6 +453,25 @@ export function TlldTuyen({
                 <option value="vol">Số đơn (volume)</option>
               </select>
             </label>
+          )}
+          {/* "Nguồn khớp" — thêm 08/09, CHỈ ở tab "🌐 Toàn hub LM12SC" (không có ý nghĩa ở 4 tab vùng
+              cũ, đã lọc theo Sheet route rồi). Multiple choice — chọn nhiều thì OR. */}
+          {hubMode && (
+            <div className="tlld-lookup-f tlld-lookup-nguon">
+              <span>Nguồn khớp</span>
+              <div className="tlld-lookup-nguon-opts">
+                {NGUON_KHOP_DEFS.map((d) => (
+                  <label key={d.key}>
+                    <input
+                      type="checkbox"
+                      checked={fNguon.has(d.key)}
+                      onChange={() => toggleNguon(d.key)}
+                    />
+                    {d.label}
+                  </label>
+                ))}
+              </div>
+            </div>
           )}
           <button type="button" className="refresh-btn" onClick={() => runLookup()} disabled={lookupLoading}>
             {lookupLoading ? "Đang tra…" : "🔎 Tra cứu"}

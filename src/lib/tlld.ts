@@ -175,6 +175,10 @@ interface DongChuyenApi {
   so_don_hang: number | null;
   tlld_weight_chuyen: number | null;
   tlld_vol_chuyen: number | null;
+  /** Kho của ĐIỂM DỪNG ĐẦU TIÊN (view tlld_trip chọn đại diện — xem 0005). Thêm 08/09 cho bộ lọc
+   *  "Nguồn khớp" (LM12SC/Tân Tạo/Tân Thuận) ở tab "🌐 Toàn hub LM12SC" — CÙNG giới hạn với `hub`
+   *  bên trên: chỉ phản ánh điểm dừng ĐẦU, không phải "chuyến có ghé qua kho này ở BẤT KỲ điểm nào". */
+  kho_dau: string | null;
 }
 
 async function fetchTlldLive(signal?: AbortSignal): Promise<DongChuyenApi[]> {
@@ -206,6 +210,9 @@ export interface TlldRangeRow {
   soDon: string;
   tlldWeight: number | null;
   tlldVol: number | null;
+  /** Kho điểm dừng ĐẦU TIÊN của chuyến (kho_dau, xem DongChuyenApi) — dùng cho bộ lọc "Nguồn khớp"
+   *  (LM12SC/Tân Tạo/Tân Thuận) ở tab "🌐 Toàn hub LM12SC", thêm 08/09. */
+  khoDau: string;
 }
 
 /** Tra cứu CHUYẾN theo khoảng ngày [tu, den) tự chọn (bỏ trống = không giới hạn đầu/cuối) — dùng cho
@@ -234,6 +241,7 @@ export async function fetchTlldRange(tu?: string, den?: string, signal?: AbortSi
     soDon: r.so_don_hang != null ? String(r.so_don_hang) : "",
     tlldWeight: r.tlld_weight_chuyen ?? null,
     tlldVol: r.tlld_vol_chuyen ?? null,
+    khoDau: r.kho_dau || "",
   }));
 }
 
