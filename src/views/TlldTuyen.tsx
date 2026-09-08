@@ -81,6 +81,22 @@ function buildColumns(rows: TRow[]): TCol[] {
  * TLLD Tuyến: menu vùng/loại tuyến như Lịch Tải; mỗi tuyến hiển thị
  * tỷ lệ lấp đầy (tlld_weight) ngày N-1 + trung bình 7 ngày gần nhất.
  */
+/** Hub gộp mới (08/09) — trang "🌐 Toàn hub LM12SC" lấy THẲNG từ TLLD Supabase (index.byCode),
+ *  không qua route Sheet nào cả (xem M12_WAREHOUSE_IDS/qualifying_trips ở api/_lib/tlldQuery.ts —
+ *  đã mở rộng OR hub='LM12SC' cùng ngày để chuyến thuộc hub này không bị sót khi nạp). */
+const HUB_LM12SC = "LM12SC";
+
+/** Band tỷ lệ lấp đầy dùng cho bộ lọc "nhóm tlld" ở thanh Tra cứu (thêm 08/09, Sếp yêu cầu) —
+ *  nửa khoảng [min, max), riêng band cuối ">50%" cố ý dùng > (không ≥) để không trùng biên với
+ *  band liền trước "30–50%" (đã bao gồm đúng 50%). */
+const TLLD_BANDS: { key: string; label: string; test: (v: number) => boolean }[] = [
+  { key: "0-10", label: "0 – 10%", test: (v) => v >= 0 && v < 0.10 },
+  { key: "10-20", label: "10 – 20%", test: (v) => v >= 0.10 && v < 0.20 },
+  { key: "20-30", label: "20 – 30%", test: (v) => v >= 0.20 && v < 0.30 },
+  { key: "30-50", label: "30 – 50%", test: (v) => v >= 0.30 && v <= 0.50 },
+  { key: "50+", label: "> 50%", test: (v) => v > 0.50 },
+];
+
 export function TlldTuyen({
   data,
   regionLabel,
@@ -89,6 +105,7 @@ export function TlldTuyen({
   search: _search,
   setSearch: _setSearch,
   view = "tong-quan",
+  hubMode = false,
 }: {
   data: SheetData;
   regionLabel: string;
@@ -101,18 +118,28 @@ export function TlldTuyen({
   /** Sub-tab trong "TLLD Tuyến": "tong-quan" = KPI + duyệt tuyến (như cũ);
    *  "bao-cao" = chỉ biểu đồ tổng hợp + nhận định AI (TlldReport), gọn cho việc đọc báo cáo nhanh. */
   view?: "tong-quan" | "bao-cao";
+  /** true = đang xem tab "🌐 Toàn hub LM12SC" (thêm 08/09) — TÁCH BIỆT HOÀN TOÀN với 4 tab vùng
+   *  cũ (Sếp yêu cầu): danh sách tuyến lấy THẲNG từ index.byCode lọc hub===LM12SC, không qua
+   *  data.routes/CategoryTabs của vùng đang chọn. Định dạng khung (KPI, Sức khoẻ, 2 cột cảnh báo,
+   *  Xu hướng dài hạn) giữ NGUYÊN như 4 tab cũ — chỉ khác NGUỒN danh sách tuyến. */
+  hubMode?: boolean;
 }) {
   const { index, loading, error, refresh } = useTlld();
   const allRoutes = useAllRoutes(); // lịch toàn vùng (realtime) để khớp lộ trình + tải trọng
 
-  // Mã tuyến (scheduler_name) thuộc ĐÚNG vùng/tab Lịch Tải đang chọn — dùng để LỌC khung "🩺 Sức
-  // khoẻ vận hành TLLD" theo vùng (Sếp yêu cầu 01/09: đổi tab vùng phải đổi số, trước đó khung này
-  // cố ý xem TOÀN CỤM nên đổi tab không đổi số — nay đổi lại theo đúng ý). Lấy từ `data.routes`
-  // (toàn bộ tuyến của vùng đang chọn, CHƯA lọc loại tuyến — khung Sức khoẻ nằm TRÊN CategoryTabs
-  // nên chỉ lọc theo vùng, không theo loại tuyến).
+  // Mã tuyến thuộc phạm vi đang xem — dùng để LỌC khung "🩺 Sức khoẻ vận hành TLLD" (Sếp yêu cầu
+  // 01/09: đổi tab vùng phải đổi số). Bình thường lấy từ `data.routes` của vùng/tab Lịch Tải đang
+  // chọn; ở tab "🌐 Toàn hub LM12SC" (hubMode) lấy thẳng các mã tuyến có hub===LM12SC trong index
+  // TLLD toàn cục — KHÔNG phụ thuộc Sheet nào (đúng ý "tách biệt hoàn toàn với 4 tab cũ").
+  const hubCodes = useMemo(() => {
+    const s = new Set<string>();
+    if (!hubMode || !index) return s;
+    for (const [code, r] of index.byCode) if (r.hub === HUB_LM12SC) s.add(code);
+    return s;
+  }, [hubMode, index]);
   const regionCodes = useMemo(
-    () => new Set(data.routes.map((r) => normCode(r.route)).filter(Boolean)),
-    [data.routes]
+    () => (hubMode ? hubCodes : new Set(data.routes.map((r) => normCode(r.route)).filter(Boolean))),
+    [hubMode, hubCodes, data.routes]
   );
   const { index: regionIndex } = useTlldRegion(regionCodes);
 
@@ -129,17 +156,28 @@ export function TlldTuyen({
   const [fTo, setFTo] = useState("");
   const [fMaTuyen, setFMaTuyen] = useState("");
   const [fMaChuyen, setFMaChuyen] = useState("");
+  // Thêm 08/09 (Sếp yêu cầu): lọc theo biển số xe + "nhóm tlld" (băng tỷ lệ lấp đầy) — áp cho CẢ
+  // 2 chỉ số (khối lượng/volume), có ô chọn chỉ số nào để áp band. fMetric mặc định "weight" —
+  // khớp đúng chỉ số đang hiển thị khắp trang này ("Lấp đầy theo khối lượng tlld_weight").
+  const [fBsx, setFBsx] = useState("");
+  const [fBand, setFBand] = useState(""); // "" = không lọc nhóm; khác thì là band.key ở TLLD_BANDS
+  const [fMetric, setFMetric] = useState<"weight" | "vol">("weight");
   const [lookupRows, setLookupRows] = useState<TlldRangeRow[] | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupErr, setLookupErr] = useState<string | null>(null);
-  const lookupTouched = !!(fFrom || fTo || fMaTuyen.trim() || fMaChuyen.trim());
+  const lookupTouched = !!(fFrom || fTo || fMaTuyen.trim() || fMaChuyen.trim() || fBsx.trim() || fBand);
 
-  async function runLookup(over?: { from?: string; to?: string; maTuyen?: string; maChuyen?: string }) {
+  async function runLookup(over?: { from?: string; to?: string; maTuyen?: string; maChuyen?: string; bsx?: string; band?: string; metric?: "weight" | "vol" }) {
     const from = over?.from ?? fFrom;
     const to = over?.to ?? fTo;
     const maTuyen = over?.maTuyen ?? fMaTuyen;
     const maChuyen = over?.maChuyen ?? fMaChuyen;
-    if (!from && !to && !maTuyen.trim() && !maChuyen.trim()) { setLookupRows(null); setLookupErr(null); return; }
+    const bsx = over?.bsx ?? fBsx;
+    const band = over?.band ?? fBand;
+    const metric = over?.metric ?? fMetric;
+    if (!from && !to && !maTuyen.trim() && !maChuyen.trim() && !bsx.trim() && !band) {
+      setLookupRows(null); setLookupErr(null); return;
+    }
     setLookupLoading(true); setLookupErr(null);
     try {
       // Chưa chọn ngày nào -> mặc định 30 ngày gần nhất (kể cả hôm nay), tránh kéo cả lịch sử.
@@ -149,9 +187,16 @@ export function TlldTuyen({
       const raw = await fetchTlldRange(from2, den);
       const codeQ = normCode(maTuyen);
       const chQ = normSearch(maChuyen);
+      const bsxQ = normSearch(bsx);
+      const bandDef = band ? TLLD_BANDS.find((b) => b.key === band) : undefined;
       let out = raw.filter((r) => {
         if (codeQ && !normCode(r.maTuyen).includes(codeQ)) return false;
         if (chQ && !normSearch(r.maChuyen).includes(chQ)) return false;
+        if (bsxQ && !normSearch(r.bienSo || "").includes(bsxQ)) return false;
+        if (bandDef) {
+          const v = metric === "weight" ? r.tlldWeight : r.tlldVol;
+          if (v == null || !bandDef.test(v)) return false;
+        }
         return true;
       });
       out = out.sort((a, b) => b.ngay.localeCompare(a.ngay) || a.maChuyen.localeCompare(b.maChuyen));
@@ -164,13 +209,13 @@ export function TlldTuyen({
     }
   }
   function clearLookup() {
-    setFFrom(""); setFTo(""); setFMaTuyen(""); setFMaChuyen("");
+    setFFrom(""); setFTo(""); setFMaTuyen(""); setFMaChuyen(""); setFBsx(""); setFBand("");
     setLookupRows(null); setLookupErr(null);
   }
   // Bấm chip "Tuyến lấp đầy <60%" ở KPI (bên dưới) -> tra cứu NGAY tuyến đó, mặc định 30 ngày gần nhất.
   function lookupRouteChip(code: string) {
-    setFMaTuyen(code); setFMaChuyen(""); setFFrom(""); setFTo("");
-    runLookup({ maTuyen: code, maChuyen: "", from: "", to: "" });
+    setFMaTuyen(code); setFMaChuyen(""); setFFrom(""); setFTo(""); setFBsx(""); setFBand("");
+    runLookup({ maTuyen: code, maChuyen: "", from: "", to: "", bsx: "", band: "" });
   }
 
   // Đúng 1 chuyến khớp bộ lọc -> coi là "đang tra 1 chuyến cụ thể", hiện thẻ chi tiết FULL TRIP.
@@ -202,6 +247,8 @@ export function TlldTuyen({
   // Danh sách tuyến theo VÙNG + LOẠI TUYẾN đang chọn (KPI + 2 cột cảnh báo) — KHÔNG lọc theo bộ lọc
   // Tra cứu ở trên (đúng nguyên tắc "chỉ dùng để tra cứu"): luôn hiện ĐỦ tuyến của vùng/loại tuyến
   // đang chọn, y hệt hành vi "duyệt" trước đây khi ô tìm kiếm cũ còn trống.
+  // Ở hubMode (tab "🌐 Toàn hub LM12SC") KHÔNG dùng data.routes/category — xem nhánh `rows` bên
+  // dưới lấy thẳng từ hubCodes/index.
   // ============================================================================================
   const byCat = useMemo(
     () => (category ? data.routes.filter((r) => r.category === category) : data.routes),
@@ -212,6 +259,18 @@ export function TlldTuyen({
   // TLLD theo mã tuyến — TÍNH 1 LẦN mỗi khi input thật sự đổi (KHÔNG mỗi lần render do cuộn trang
   // đổi `visible`, đây là nguyên nhân chính khiến duyệt/cuộn danh sách bị giật — Sếp báo 2026-08-12).
   const rows = useMemo(() => {
+    if (hubMode) {
+      // Không có "Route" Sheet nào cho các mã tuyến này (đến thẳng từ TLLD) — dựng stub tối thiểu
+      // đủ để TlldCard/buildColumns dùng được (route.route/stops — stops rỗng thì TlldCard tự
+      // fallback đọc lộ trình từ tlld.routeText, xem components/TlldCard.tsx).
+      const out: TRow[] = [];
+      for (const code of hubCodes) {
+        const tlld = index?.byCode.get(code);
+        if (!tlld) continue;
+        out.push({ route: { route: code, load: "", category: "", stops: [], mappedCount: 0 }, tlld });
+      }
+      return out;
+    }
     const enrich = (r: Route): Route => {
       const g = allRoutes.get(normCode(r.route));
       if (!g) return r;
@@ -224,7 +283,7 @@ export function TlldTuyen({
       };
     };
     return byCat.map((r) => ({ route: enrich(r), tlld: index?.byCode.get(normCode(r.route)) }));
-  }, [byCat, allRoutes, index]);
+  }, [hubMode, hubCodes, byCat, allRoutes, index]);
 
   // KPI vùng (chỉ tính tuyến có dữ liệu)
   const withData = useMemo(() => rows.filter((x) => x.tlld && (x.tlld.n1 != null || x.tlld.avg7 != null)), [rows]);
@@ -339,6 +398,34 @@ export function TlldTuyen({
               onKeyDown={(e) => { if (e.key === "Enter") runLookup(); }}
             />
           </label>
+          <label className="tlld-lookup-f">
+            <span>Biển số xe</span>
+            <input
+              type="text"
+              placeholder="VD: 51D-…"
+              value={fBsx}
+              onChange={(e) => setFBsx(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") runLookup(); }}
+            />
+          </label>
+          <label className="tlld-lookup-f">
+            <span>Nhóm TLLD</span>
+            <select value={fBand} onChange={(e) => setFBand(e.target.value)}>
+              <option value="">Tất cả</option>
+              {TLLD_BANDS.map((b) => (
+                <option key={b.key} value={b.key}>{b.label}</option>
+              ))}
+            </select>
+          </label>
+          {fBand && (
+            <label className="tlld-lookup-f">
+              <span>Theo chỉ số</span>
+              <select value={fMetric} onChange={(e) => setFMetric(e.target.value as "weight" | "vol")}>
+                <option value="weight">Khối lượng</option>
+                <option value="vol">Số đơn (volume)</option>
+              </select>
+            </label>
+          )}
           <button type="button" className="refresh-btn" onClick={() => runLookup()} disabled={lookupLoading}>
             {lookupLoading ? "Đang tra…" : "🔎 Tra cứu"}
           </button>
@@ -355,16 +442,17 @@ export function TlldTuyen({
       </div>
 
       {/* SỨC KHOẺ VẬN HÀNH TLLD — LỌC THEO VÙNG đang chọn (regionIndex, đổi theo sheetKey/tab —
-          Sếp yêu cầu 01/09), KHÔNG còn xem toàn cụm như bản đầu. Xem src/components/TlldSucKhoe.tsx
-          + useTlldRegion() ở lib/useTlld.ts. KHÔNG bị ảnh hưởng bởi bộ lọc Tra cứu ở trên (03/09 —
-          chỉ dùng để tra cứu, không đụng khung này). */}
+          Sếp yêu cầu 01/09), KHÔNG còn xem toàn cụm như bản đầu. Ở hubMode lọc theo hubCodes (toàn
+          hub LM12SC) thay vì vùng Sheet. Xem src/components/TlldSucKhoe.tsx + useTlldRegion() ở
+          lib/useTlld.ts. KHÔNG bị ảnh hưởng bởi bộ lọc Tra cứu ở trên (03/09 — chỉ dùng để tra
+          cứu, không đụng khung này). */}
       <TlldSucKhoe index={regionIndex} />
 
       <div className="kpi-row tlld" style={{ marginTop: 16 }}>
         <div className="kpi">
           <div className="lbl">Tuyến có dữ liệu TLLD</div>
           <div className="val orange">{withData.length}</div>
-          <div className="note">/ {byCat.length} tuyến vùng này</div>
+          <div className="note">/ {hubMode ? hubCodes.size : byCat.length} tuyến {hubMode ? "thuộc hub LM12SC" : "vùng này"}</div>
         </div>
         <div className="kpi blue">
           <div className="lbl">TB lấp đầy N-1</div>
@@ -402,12 +490,16 @@ export function TlldTuyen({
         </div>
       </div>
 
-      <CategoryTabs
-        categories={data.categories}
-        routes={data.routes}
-        active={category}
-        onChange={setCategory}
-      />
+      {/* Ẩn ở hubMode: tab "🌐 Toàn hub LM12SC" gộp TOÀN BỘ tuyến của hub, không tách theo loại
+          tuyến (Sếp yêu cầu — tách biệt hoàn toàn với 4 tab vùng cũ, vốn vẫn giữ CategoryTabs). */}
+      {!hubMode && (
+        <CategoryTabs
+          categories={data.categories}
+          routes={data.routes}
+          active={category}
+          onChange={setCategory}
+        />
+      )}
 
       <div className="statusbar">
         {error ? (

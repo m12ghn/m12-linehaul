@@ -281,12 +281,16 @@ nav.tabs::-webkit-scrollbar-thumb { background: var(--orange); border-radius: 6p
 /* Bộ lọc "Tra cứu" TLLD Tuyến (khoảng ngày từ-đến + mã tuyến + mã chuyến) — thay ô tìm kiếm chung
    cũ của trang, đóng băng ở đầu trang khi cuộn (Sếp yêu cầu 03/09/2026). Dùng lại .toolbar làm
    khung ngoài (flex + wrap có sẵn), chỉ thêm sticky + nền để không bị nội dung đè lên khi cuộn. */
-.tlld-lookup-bar { position: sticky; top: 0; z-index: 6; background: var(--bg, var(--surface-sunken)); padding: 10px 0; }
+/* 08/09: top đổi 0 -> 110px — KHỚP đúng offset .map-panel đang dùng (chiều cao header .navwrap +
+   .subnav cộng lại), để thanh này đóng băng NGAY DƯỚI subnav (vùng/tab) khi cuộn, không bị đè/khuất
+   sau header như top:0 cũ (subnav đã sticky top:50px, đứng TRÊN thanh này). */
+.tlld-lookup-bar { position: sticky; top: 110px; z-index: 6; background: var(--bg, var(--surface-sunken)); padding: 10px 0; }
 .tlld-lookup-fields { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; flex: 1; }
 .tlld-lookup-f { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); font-weight: 600; }
-.tlld-lookup-f input { padding: 9px 12px; border: 1.5px solid var(--line-2); border-radius: 10px; font-size: 14px; background: var(--white); outline: none; transition: .15s; font-family: inherit; }
-.tlld-lookup-f input:focus { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(255, 82, 0, .1); }
+.tlld-lookup-f input, .tlld-lookup-f select { padding: 9px 12px; border: 1.5px solid var(--line-2); border-radius: 10px; font-size: 14px; background: var(--white); outline: none; transition: .15s; font-family: inherit; }
+.tlld-lookup-f input:focus, .tlld-lookup-f select:focus { border-color: var(--orange); box-shadow: 0 0 0 4px rgba(255, 82, 0, .1); }
 .tlld-lookup-f input[type="text"] { min-width: 150px; }
+.tlld-lookup-f select { min-width: 120px; cursor: pointer; }
 .tlld-lookup-results-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .tlld-lookup-results .tc-grid tbody tr { cursor: pointer; }
 

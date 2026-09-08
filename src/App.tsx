@@ -51,6 +51,10 @@ export default function App() {
   // tab Lịch Tải) theo yêu cầu Sếp — xem src/components/RouteCard.tsx.
   const [ltSub, setLtSub] = useState<"lich" | "gsvt" | "cong">("lich");
   const [tlldSub, setTlldSub] = useState<"tong-quan" | "bao-cao">("tong-quan"); // sub-tab trong TLLD Tuyến: Tổng Quan | Báo Cáo
+  // Tab "🌐 Toàn hub LM12SC" trong TLLD Tuyến (thêm 08/09) — nút PHỤ đặt TRƯỚC 4 tab vùng
+  // (SheetTabs), KHÔNG dùng chung sheetKey (Lịch Tải/Lộ Trình vẫn cần đúng 1 Sheet thật để tải
+  // dữ liệu). Chọn 1 trong 4 tab vùng -> tự tắt lại (xem onChange của SheetTabs bên dưới).
+  const [tlldHubMode, setTlldHubMode] = useState(false);
   // sub-tab trong Plan Event: Kế Hoạch (quyết định hằng ngày) | Chi tiết & Đánh giá (kiểm chứng/tra cứu).
   // CỐ Ý dùng useState thường (không usePersistentState) — luôn reset về "ke-hoach" mỗi lần vào lại
   // trang, tránh kẹt ở tab "Chi tiết" từ lần xem trước khi không còn thấy banner quyết định ngay.
@@ -137,7 +141,15 @@ export default function App() {
       <Header user={user} onLogout={logout} />
       <NavBar active={topMenu} onChange={(m) => startTransition(() => setTopMenu(m))} />
       {((topMenu === "lich-tai" && ltSub === "lich") || topMenu === "lo-trinh" || topMenu === "tlld-tuyen") && (
-        <SheetTabs activeKey={sheetKey} onChange={setSheetKey} />
+        <SheetTabs
+          activeKey={sheetKey}
+          onChange={(k) => { setSheetKey(k); setTlldHubMode(false); }}
+          leadingTab={
+            topMenu === "tlld-tuyen"
+              ? { label: "🌐 Toàn hub LM12SC", active: tlldHubMode, onClick: () => setTlldHubMode(true) }
+              : undefined
+          }
+        />
       )}
 
       <div className="page">
@@ -203,12 +215,13 @@ export default function App() {
             </div>
             <TlldTuyen
               data={data}
-              regionLabel={sheet.label}
+              regionLabel={tlldHubMode ? "🌐 Toàn hub LM12SC" : sheet.label}
               category={category}
               setCategory={setCategory}
               search={search}
               setSearch={setSearch}
               view={tlldSub}
+              hubMode={tlldHubMode}
             />
           </>
         )}
