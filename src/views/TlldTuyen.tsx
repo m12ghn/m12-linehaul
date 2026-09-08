@@ -177,13 +177,16 @@ export function TlldTuyen({
   const [fMetric, setFMetric] = useState<"weight" | "vol">("weight");
   // "Nguồn khớp" (thêm 08/09) — CHỈ áp dụng/hiện ở hubMode (tab "🌐 Toàn hub LM12SC"), không có ý
   // nghĩa ở 4 tab vùng cũ (đã lọc theo Sheet route rồi). Set rỗng = không lọc (như các ô khác).
+  // ⚠ Sếp phản hồi 08/09: tick checkbox mà "chưa apply" — vì các ô khác (ngày/mã tuyến/BSX/band) đều
+  // cần bấm "🔎 Tra cứu" mới chạy, checkbox này lúc đầu làm GIỐNG vậy nên im lặng không thấy gì đổi.
+  // Checkbox là thao tác rời rạc (không gõ từng phím như ô text) nên tự CHẠY LUÔN khi tick, không bắt
+  // bấm thêm nút — khác 3 ô kia (vẫn giữ nguyên hành vi cũ, tránh gọi API dồn dập khi đang gõ).
   const [fNguon, setFNguon] = useState<Set<string>>(new Set());
   function toggleNguon(key: string) {
-    setFNguon((prev) => {
-      const s = new Set(prev);
-      if (s.has(key)) s.delete(key); else s.add(key);
-      return s;
-    });
+    const s = new Set(fNguon);
+    if (s.has(key)) s.delete(key); else s.add(key);
+    setFNguon(s);
+    runLookup({ nguon: s });
   }
   const [lookupRows, setLookupRows] = useState<TlldRangeRow[] | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
