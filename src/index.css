@@ -2155,16 +2155,37 @@ button.danger {
 /* Module TICKET XIN TĂNG CƯỜNG — thêm 09/2026 (xem src/views/TicketXinTangCuong.tsx +
    src/lib/ticketXtc.ts). Bảng ".xtc-table" tái dùng style ".re-stops" (RouteEditor) nhưng
    nhiều cột hơn hẳn (đủ layout sheet) nên cần vài override riêng:
+   - .re-stops có "width:100%" -> khi tổng độ rộng cột (auto-layout) < độ rộng khung chứa,
+     trình duyệt kéo giãn đều các cột thưa dữ liệu (Vùng/Telegram/Tên BC khác…) ra rất rộng,
+     nhìn "nhiều chỗ trống" (feedback 09/2026). Đổi sang width:auto để bảng co khít nội dung,
+     giống ô đặc của sheet thật — .rt-wrap vẫn lo phần cuộn ngang khi bảng rộng hơn khung.
    - Bỏ style "cột đầu = số thứ tự điểm dừng, rộng 32px" của .re-stops vì cột đầu ở đây là
      "Timestamp" (dữ liệu thật, không phải số thứ tự).
-   - min-width lớn để .rt-wrap cuộn ngang mượt thay vì các cột bị bóp quá chật. */
-.xtc-table.re-stops { min-width: 1900px; }
+   - Padding cell giảm nhẹ + white-space nowrap cho ô chữ ngắn -> đặc hơn, đỡ dàn trải. */
+.xtc-table.re-stops { width: auto; min-width: 0; }
 .xtc-table.re-stops td:first-child,
 .xtc-table.re-stops th:first-child { width: auto; color: inherit; }
-.xtc-ro { color: var(--muted, var(--text-muted)); white-space: nowrap; }
+.xtc-table.re-stops th, .xtc-table.re-stops td { padding: 6px 10px; white-space: nowrap; }
+.xtc-ro { color: var(--ink-2, var(--text)); white-space: nowrap; }
 .xtc-pill {
   display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 11px;
   font-size: 12px; font-weight: 700; white-space: nowrap;
   background: var(--line); color: var(--ink-2, var(--text-muted));
 }
 .xtc-pill.on { background: var(--green-soft); color: var(--green); }
+
+/* Modal "✏️ Nhập/Sửa" — gộp toàn bộ input GSVT + bot ad hoc vào 1 khung, thay vì rải input
+   theo từng cột bảng (feedback 09/2026: "ko cần theo cột; làm nút hoặc khung trống để điền").
+   Tái dùng đúng convention modal đã có (.pq-backdrop/.pq-modal ở Phân quyền) nhưng đặt tên
+   riêng "xtc-" vì đây là module khác, tránh lẫn CSS khi 1 trong 2 bên đổi sau này. */
+.xtc-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.xtc-modal { background: var(--white); border-radius: 18px; box-shadow: 0 16px 40px -12px rgba(0,0,0,.28); width: min(640px, 100%); max-height: 88vh; overflow: auto; padding: 20px 22px; }
+.xtc-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.xtc-modal-head h3 { margin: 0; font-size: 17px; }
+.xtc-modal-sub { font-size: 13.5px; color: var(--muted); margin: 4px 0 14px; }
+.xtc-modal-section { font-size: 13px; font-weight: 700; color: var(--muted); margin: 16px 0 8px; }
+.xtc-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.xtc-modal-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.xtc-modal-grid label.xtc-check { flex-direction: row; align-items: center; gap: 8px; font-weight: 700; color: var(--ink); }
+.xtc-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+@media (max-width: 560px) { .xtc-modal-grid { grid-template-columns: 1fr; } }
