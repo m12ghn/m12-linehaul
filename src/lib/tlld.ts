@@ -27,6 +27,28 @@ export function normCode(s: string): string {
   return (s || "").trim().toUpperCase().replace(/\s+/g, "");
 }
 
+/** Mã tuyến GIẢ dùng cho chuyến KHÔNG có scheduler_name (loai_lich="Tăng cường", ad-hoc — xem
+ *  qualifying_trips/loai_lich ở api/_lib/tlldQuery.ts). Sếp phát hiện 08/09: khi chuyến không có
+ *  scheduler_name thì ma_tuyen trả về NULL -> normCode("") = "" -> KHÔNG BAO GIỜ được cộng vào
+ *  acc/byCode (mọi nơi cộng dồn đều gate bằng `if (code) {...}`), nên hoàn toàn "vô hình" ở mọi chỗ
+ *  lọc/đếm THEO MÃ TUYẾN — trong đó có allowedCodes của loadTlldForCodes()/useTlldRegion() (dùng cho
+ *  khung "🩺 Sức khoẻ vận hành TLLD", bao gồm tab "🌐 Toàn hub LM12SC" mới). Kết quả: SỐ CHUYẾN hiển
+ *  thị ở khung đó bị thiếu đúng bằng số chuyến Tăng cường thật (466 vs 488/489 GHN chính thống ngày
+ *  07/09 — CSV đối chiếu có 55 chuyến "Tăng cường"/488, khớp phần lệch còn lại).
+ *  Gom hết vào 1 mã GIẢ dùng chung để các chuyến này có "chỗ đứng" trong byCode/allowedCodes — KHÔNG
+ *  đổi ma_tuyen thật trả về (byChuyen.code vẫn set bằng biến `code` này nên cũng đổi theo, chấp nhận
+ *  được vì trước giờ field đó với chuyến Tăng cường vốn đã rỗng "", không ai dựa vào nó để khớp Sheet
+ *  thật). TLLD trung bình của mã giả này gộp NHIỀU chuyến tăng cường không liên quan tới nhau — chỉ
+ *  có ý nghĩa "có bao nhiêu chuyến, ở khoảng nào", KHÔNG coi là 1 tuyến thật để xem xu hướng/so kỳ. */
+export const TANG_CUONG_CODE = "TẢI TĂNG CƯỜNG";
+
+/** Mã tuyến dùng để GOM NHÓM/LỌC (không phải mã tuyến thật để khớp Sheet) — normCode() bình thường,
+ *  rỗng thì thay bằng TANG_CUONG_CODE. Dùng THAY cho normCode(r.ma_tuyen || "") ở mọi chỗ cộng dồn
+ *  hoặc lọc theo allowedCodes, để chuyến Tăng cường không bị "biến mất" khỏi các bộ đếm theo vùng. */
+export function effectiveCode(maTuyen: string | null | undefined): string {
+  return normCode(maTuyen || "") || TANG_CUONG_CODE;
+}
+
 
 export interface TlldRoute {
   n1: number | null; // lấp đầy ngày gần nhất
@@ -260,7 +282,7 @@ export async function loadTlld(signal?: AbortSignal, force = false): Promise<Tll
  *  thêm request mạng, chỉ tính lại phần gộp (rẻ — mảng vài nghìn dòng). */
 export async function loadTlldForCodes(allowedCodes: Set<string>, signal?: AbortSignal, force = false): Promise<TlldIndex> {
   const rows = await loadTlldRows(signal, force);
-  const filtered = rows.filter((r) => allowedCodes.has(normCode(r.ma_tuyen || "")));
+  const filtered = rows.filter((r) => allowedCodes.has(effectiveCode(r.ma_tuyen)));
   return buildTlldIndex(filtered);
 }
 
@@ -307,7 +329,7 @@ function buildTlldIndex(rows: DongChuyenApi[]): TlldIndex {
   // 1 dòng JSON = 1 chuyến (view đã khử trùng lặp điểm-dừng, xem 0005) -> không còn
   // phải đoán cột/tách nhiều tab hub như CSV cũ, chỉ việc gộp thẳng vào các map trên.
   function processDong(r: DongChuyenApi): void {
-    const code = normCode(r.ma_tuyen || "");
+    const code = effectiveCode(r.ma_tuyen);
     const date = r.ngay;
     const w = r.tlld_weight_chuyen;
     const vRatio = r.tlld_vol_chuyen;
