@@ -300,7 +300,12 @@ export function TicketXinTangCuong() {
           )}
 
           {!error && visibleRows && visibleRows.length > 0 && (
-            <div className="section-card xtc-scroll">
+            <div className="section-card xtc-card">
+              {/* Bọc riêng phần cuộn (.xtc-scroll) KHÔNG mang border-radius — để chung với
+                  .section-card (bo góc + overflow) là tổ hợp hay gây lỗi vẽ sai header dính
+                  ở Chromium (đã thấy khi test: 1 mảnh nút "Nhập/Sửa" của dòng liền kề lấn lên
+                  trên header dù z-index/thứ tự DOM đúng) — tách ra là cách sửa chuẩn. */}
+              <div className="xtc-scroll">
               <table className="re-stops xtc-table">
                 <thead>
                   <tr>
@@ -385,6 +390,7 @@ export function TicketXinTangCuong() {
                   ))}
                 </tbody>
               </table>
+              </div>
               <p className="rt-note">
                 Đang hiện <b>{visibleRows.length}</b>/{summary?.tong ?? visibleRows.length} ticket (khoảng ngày đã chọn{hideApproved ? ", đã ẩn ticket đã duyệt" : ""}).
                 Bấm <b>✏️ Nhập/Sửa</b> ở cuối mỗi dòng để GSVT nhập trạng thái, BKS, tài xế… và phần bot Playwright ad hoc — các cột còn
