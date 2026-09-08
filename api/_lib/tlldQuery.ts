@@ -38,12 +38,28 @@ WITH
 -- KHÔNG đổi múi giờ, và đây là chủ ý: tài liệu Data API nội bộ ghi rõ mốc thời
 -- gian bên này "nhãn Z nhưng đã là giờ VN" (khác TruckAir MCP — bên đó UTC thật).
 -- Thêm AT TIME ZONE vào là lệch đi 7 tiếng theo chiều ngược lại.
+-- 08/09: mở rộng thêm 2 điều kiện OR theo yêu cầu Sếp — GIỮ NGUYÊN
+-- warehouse_id IN (...) làm điều kiện gốc, không bớt kho nào:
+--   • hub = 'LM12SC'          — bắt luôn chuyến thuộc hub này dù ghé điểm
+--                                dừng có warehouse_id ngoài 5 ID trên.
+--   • stoppoint_name IN (...) — 2 kho Tân Thuận (22957000) / Tân Tạo (21606000),
+--                                đã nằm trong M12_WAREHOUSE_IDS rồi, thêm khớp
+--                                theo TÊN để không sót nếu có dòng nào cùng kho
+--                                vật lý nhưng ghi khác warehouse_id (đúng rủi ro
+--                                mà khoSql() bên dưới dùng để dò lệch id/tên).
 qualifying_trips AS (
   SELECT DISTINCT code
   FROM "ghn-reporting"."fa"."dtm_logistics_trip_detail"
   WHERE date(first_check_in) >= DATE '${tuNgay}'
     AND date(first_check_in) <  DATE '${denNgay}'
-    AND warehouse_id IN (${M12_WAREHOUSE_IDS.join(", ")})
+    AND (
+      warehouse_id IN (${M12_WAREHOUSE_IDS.join(", ")})
+      OR hub = 'LM12SC'
+      OR stoppoint_name IN (
+        'Kho Giao Hàng Nặng - Tân Thuận - HCM',
+        'Kho Giao Hàng Nặng - Tân Tạo - HCM'
+      )
+    )
 ),
 
 -- Hai danh sách biển số được cấu hình riêng. Bậc của chúng tra theo BIỂN SỐ chứ
