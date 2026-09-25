@@ -167,3 +167,60 @@ create policy "public read tlld_daily" on tlld_daily for select using (true);
 drop policy if exists "public read vehicle_assignments" on vehicle_assignments;
 create policy "public read vehicle_assignments" on vehicle_assignments for select using (true);
 -- KHÔNG tạo policy select cho raw_sheet_snapshot / migration_runs -> mặc định chặn hết với anon key.
+
+/* ============================================================
+   PHA 3 — hạ tầng cho port functions/api/* sang Vercel (xem supabase/PHA3-PLAN.md).
+   ============================================================ */
+
+-- ------------------------------------------------------------
+-- Cầu nối thay Cloudflare KV: port cơ học `env.QA_KV.get/put(key)` -> bảng này.
+-- KHÔNG có policy public -> chỉ Vercel Edge Function (service_role) đọc/ghi được,
+-- đúng mức bảo vệ như KV hiện tại (accounts/report/knowledge... không lộ qua client).
+-- ------------------------------------------------------------
+create table if not exists kv_store (
+  key text primary key,
+  value jsonb not null default '{}',
+  updated_at timestamptz not null default now()
+);
+alter table kv_store enable row level security;
+-- KHÔNG tạo policy select/insert/update cho anon/authenticated -> mặc định chặn hết.
+
+-- ------------------------------------------------------------
+-- Khung RBAC gắn với Supabase Auth (auth.users) — THAY THẾ dần accounts:v2 (KV) +
+-- roles.ts một khi cutover đăng nhập sang Supabase Auth (CHƯA bật, xem PHA3-PLAN.md
+-- mục "Cần Sếp quyết định"). Ai cũng đọc được dòng CỦA MÌNH (để tự biết vai trò);
+-- CHỈ admin đọc/ghi được TOÀN BỘ (quản lý nhân sự).
+-- ------------------------------------------------------------
+create table if not exists user_roles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email text not null,
+  name text,
+  role_id text not null default 'staff',
+  disabled boolean not null default false,
+  updated_at timestamptz not null default now()
+);
+alter table user_roles enable row level security;
+
+drop policy if exists "read own role" on user_roles;
+create policy "read own role" on user_roles for select using (auth.uid() = user_id);
+
+-- Admin đọc/ghi mọi dòng — kiểm tra qua chính bảng này (subquery) nên KHÔNG đệ quy vô hạn:
+-- policy chỉ áp dụng cho câu lệnh đang chạy, subquery vẫn được phép chạy vì cùng thoả "read own role".
+drop policy if exists "admin manage all roles" on user_roles;
+create policy "admin manage all roles" on user_roles for all
+  using (exists (select 1 from user_roles ur where ur.user_id = auth.uid() and ur.role_id = 'admin'))
+  with check (exists (select 1 from user_roles ur where ur.user_id = auth.uid() and ur.role_id = 'admin'));
+
+-- ------------------------------------------------------------
+-- Chuẩn bị cho lichtai-edit kiểu mới: sửa lịch tải = UPDATE thẳng vào routes/route_stops
+-- qua Supabase client (RLS chỉ cho phép admin ghi) thay vì gọi 1 Vercel Function riêng
+-- ghi ngược Google Sheet như hiện tại.
+-- ------------------------------------------------------------
+drop policy if exists "admin update routes" on routes;
+create policy "admin update routes" on routes for update
+  using (exists (select 1 from user_roles ur where ur.user_id = auth.uid() and ur.role_id = 'admin'))
+  with check (exists (select 1 from user_roles ur where ur.user_id = auth.uid() and ur.role_id = 'admin'));
+drop policy if exists "admin update route_stops" on route_stops;
+create policy "admin update route_stops" on route_stops for update
+  using (exists (select 1 from user_roles ur where ur.user_id = auth.uid() and ur.role_id = 'admin'))
+  with check (exists (select 1 from user_roles ur where ur.user_id = auth.uid() and ur.role_id = 'admin'));
