@@ -27,11 +27,11 @@ lưu. `kv_store` **KHÔNG có RLS public** (chỉ Vercel Edge Function dùng `SU
 | File | Việc gì | Hướng Pha 3 | Độ ưu tiên/rủi ro |
 |---|---|---|---|
 | `visits.ts` | Đếm lượt truy cập | ✅ **Đã port** — `api/visits.ts` (ví dụ mẫu cho cầu nối `kv_store`) | Thấp — đã xong |
-| `qa.ts` | Hỏi đáp/góp ý | Port qua `kv_store` (key `qa:list`) — cơ học | Thấp |
-| `report.ts` | Báo cáo đã chốt (Plan Event...) | Port qua `kv_store` (key `report:<key>`) | Thấp |
-| `knowledge.ts` | Bộ nhớ kiến thức trợ lý | Port qua `kv_store` (key `kb:list`) | Thấp |
-| `users.ts` | Ghi nhận người dùng đăng nhập | Port qua `kv_store`, hoặc bỏ hẳn nếu chuyển hẳn qua Supabase Auth (đã có `auth.users` sẵn danh sách) | Thấp |
-| `dashdata.ts` | Dữ liệu nạp thêm cho từng mục | Port qua `kv_store` | Thấp |
+| `qa.ts` | Hỏi đáp/góp ý | ✅ **Đã port** — `api/qa.ts` (key `qa:list`) | Thấp — đã xong |
+| `report.ts` | Báo cáo đã chốt (Plan Event...) | ✅ **Đã port** — `api/report.ts` (key `report:<key>`) | Thấp — đã xong |
+| `knowledge.ts` | Bộ nhớ kiến thức trợ lý | ✅ **Đã port** — `api/knowledge.ts` (key `kb:list`) | Thấp — đã xong |
+| `users.ts` | Ghi nhận người dùng đăng nhập | ✅ **Đã port** — `api/users.ts` (key `users:list`) — sẽ xem lại khi cutover Supabase Auth (`auth.users` đã có sẵn danh sách, có thể không cần bảng riêng nữa) | Thấp — đã xong |
+| `dashdata.ts` | Dữ liệu nạp thêm cho từng mục | ✅ **Đã port** — `api/dashdata.ts` (key `extra:<id>` + `extra:_shared`) | Thấp — đã xong |
 | `daily.ts` / `overview.ts` | Snapshot phân tích AI theo giờ cố định | Port qua `kv_store` — NHƯNG phụ thuộc `assistant.ts` (xem dưới) | Trung bình (chờ quyết định AI) |
 | `roles.ts` | RBAC (roles + matrix) | Port qua `kv_store` **hoặc** bảng `user_roles` (đã có schema, xem mục dưới) — ưu tiên bảng quan hệ vì đã có RLS | Thấp |
 | `geo.ts` | Toạ độ kho/BC (đọc OAuth Sheet riêng) | ✅ Không cần port — Pha 0 đã có bảng `warehouses` trong Supabase, chỉ cần đổi `initLiveGeo()` sang query Supabase thay vì `/api/geo` | Thấp, đã có dữ liệu sẵn |
@@ -56,6 +56,14 @@ lưu. `kv_store` **KHÔNG có RLS public** (chỉ Vercel Edge Function dùng `SU
   được thật trên Vercel nếu có `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` trong env Vercel.
 - `src/lib/supabaseAuth.ts` — helper đăng nhập OTP qua Supabase Auth, **CHƯA wire vào `App.tsx`**
   (đăng nhập thật của Dash vẫn dùng `_session.ts`/Cloudflare như cũ cho tới khi Sếp xác nhận cutover).
+- `api/_kv.ts`, `api/_admin.ts` — helper dùng chung cho các Edge Function port tiếp theo.
+- `api/qa.ts`, `api/report.ts`, `api/knowledge.ts`, `api/dashdata.ts`, `api/users.ts` — port đầy đủ
+  nhóm `kv_store` đơn giản, giữ NGUYÊN contract JSON như bản Cloudflare (drop-in, frontend gọi
+  `/api/...` không cần đổi gì khi deploy trên Vercel). **Lưu ý khác biệt**: `api/_admin.ts` bản Vercel
+  CHỈ kiểm tra `x-admin-token` (khoá dự phòng) — CHƯA có kiểm tra phiên đăng nhập vai trò admin như
+  bản Cloudflare (`_session.ts`), vì auth chưa cutover. Nghĩa là trên nhánh Vercel, thao tác admin
+  (xoá QA, lưu report, xem danh sách user) chỉ chạy được nếu client gửi kèm header `x-admin-token`
+  đúng — cần đặt biến `ADMIN_TOKEN` trong Vercel env giống bên Cloudflare.
 
 ## Quyết định của Sếp (2026-09-25)
 
