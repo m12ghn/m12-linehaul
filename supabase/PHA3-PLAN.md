@@ -33,10 +33,10 @@ lưu. `kv_store` **KHÔNG có RLS public** (chỉ Vercel Edge Function dùng `SU
 | `users.ts` | Ghi nhận người dùng đăng nhập | ✅ **Đã port** — `api/users.ts` (key `users:list`) — sẽ xem lại khi cutover Supabase Auth (`auth.users` đã có sẵn danh sách, có thể không cần bảng riêng nữa) | Thấp — đã xong |
 | `dashdata.ts` | Dữ liệu nạp thêm cho từng mục | ✅ **Đã port** — `api/dashdata.ts` (key `extra:<id>` + `extra:_shared`) | Thấp — đã xong |
 | `daily.ts` / `overview.ts` | Snapshot phân tích AI theo giờ cố định | Port qua `kv_store` — NHƯNG phụ thuộc `assistant.ts` (xem dưới) | Trung bình (chờ quyết định AI) |
-| `roles.ts` | RBAC (roles + matrix) | Port qua `kv_store` **hoặc** bảng `user_roles` (đã có schema, xem mục dưới) — ưu tiên bảng quan hệ vì đã có RLS | Thấp |
-| `geo.ts` | Toạ độ kho/BC (đọc OAuth Sheet riêng) | ✅ Không cần port — Pha 0 đã có bảng `warehouses` trong Supabase, chỉ cần đổi `initLiveGeo()` sang query Supabase thay vì `/api/geo` | Thấp, đã có dữ liệu sẵn |
+| `roles.ts` | RBAC (roles + matrix) | ✅ **Đã port** — `api/roles.ts` (key `rbac:v1`, cầu nối `kv_store` — giữ nguyên contract, chưa đổi sang bảng `user_roles` vì đó là việc của cutover auth) | Thấp — đã xong |
+| `geo.ts` | Toạ độ kho/BC (đọc OAuth Sheet riêng) | ✅ **Đã port** — `api/geo.ts` query thẳng bảng `warehouses` (Pha 0), không cần OAuth/cache riêng nữa | Thấp — đã xong |
 | `sheet-v4.ts` | Đọc Sheet qua OAuth Sheets API | ✅ Không cần nữa sau cutover — `routes`/`route_stops` đã sống trong Postgres (Pha 0/1) | — |
-| `lichtai-edit.ts` | Sửa lịch tải, ghi ngược Sheet | Sau cutover: **UPDATE trực tiếp** bảng `routes`/`route_stops` qua Supabase client, RLS chỉ cho admin — **không cần** 1 Vercel Function riêng nữa (đã thêm policy UPDATE admin-only trong `schema.sql`) | Trung bình — cần viết UI gọi update thay vì gọi API cũ |
+| `lichtai-edit.ts` | Sửa lịch tải, ghi ngược Sheet | ✅ **Đã port** — `api/lichtai-edit.ts` UPDATE thẳng `routes`/`route_stops` (tìm route theo region_key+route_name, tìm stop theo route_id+match{} thay "dấu vân tay" trên grid) — giữ nguyên request/response shape với bản Cloudflare, log thao tác vào `kv_store` (key `ltedit:log:list`) | Đã xong — CHƯA đổi `src/lib/lichTaiEdit.ts` (client) trỏ sang Vercel, vẫn gọi bản Cloudflare cho tới khi cutover |
 | `accounts.ts`, `auth.ts`, `_session.ts` | Đăng nhập + quản lý tài khoản tự chế (PBKDF2 + HMAC session) | **Thay bằng Supabase Auth** (OTP email có sẵn) — đã scaffold `src/lib/supabaseAuth.ts`, **CHƯA wire vào App.tsx** | ⚠️ Cao — đổi cơ chế đăng nhập của người dùng thật, cần Sếp xác nhận thời điểm cutover trước khi bật |
 | `_admin.ts` | Check quyền admin | Thay bằng RLS (`user_roles.role_id = 'admin'`) — không cần hàm riêng phía server nữa | Trung bình, đi cùng auth |
 | `_gsheets.ts`, `oauth-authorize.ts`, `oauth-callback.ts` | Ghi Sheet bằng service account + luồng xin quyền OAuth | Không cần nữa sau cutover, TRỪ KHI còn sheet nào khác chưa migrate (xem `bao-cao-tudong.ts`) | — |
@@ -76,8 +76,22 @@ lưu. `kv_store` **KHÔNG có RLS public** (chỉ Vercel Edge Function dùng `SU
    Cloudflare (`_session.ts`) cho tới khi có xác nhận rõ ràng.
 3. **Sheet "Lịch tải M12" (nhật ký thực tế)** — ✅ **migrate luôn**, đã thêm vào `migrate.mjs` (Bronze).
 
-## Việc có thể làm tiếp NGAY (không chờ 2 quyết định còn treo)
+## Đã hoàn tất mọi việc KHÔNG cần chờ 2 quyết định còn treo
 
-Nhóm `kv_store` đơn giản (qa/report/knowledge/dashdata/users) → RBAC (`roles.ts` → `user_roles`) →
-`geo.ts` (đổi sang query `warehouses`) → `lichtai-edit.ts` (UPDATE trực tiếp DB). Auth và AI assistant
-port sau khi có quyết định 1 và 2.
+Toàn bộ nhóm `kv_store` đơn giản (`qa`/`report`/`knowledge`/`dashdata`/`users`/`roles`) + `geo.ts`
+(query `warehouses`) + `lichtai-edit.ts` (UPDATE trực tiếp `routes`/`route_stops`) đã port sang
+`api/*.ts` (Vercel Edge Functions), giữ nguyên contract JSON với bản Cloudflare tương ứng.
+
+**Còn lại — CHỜ 2 quyết định treo** (không tự làm được, xem mục "Quyết định của Sếp"):
+- `_session.ts`/`_admin.ts`/`auth.ts`/`accounts.ts` → Supabase Auth (chờ thời điểm cutover đăng nhập).
+- `aiconfig.ts`/`assistant.ts` → chờ chọn nhà cung cấp LLM trả phí.
+
+**Chưa port** (không thuộc nhóm ưu tiên, ít dùng hoặc phụ thuộc lịch cron riêng của Cloudflare):
+`daily.ts`, `overview.ts` (snapshot AI theo giờ — phụ thuộc `assistant.ts`), `route.ts` (proxy Google
+Maps — port thẳng khi cần, không phụ thuộc gì đang chờ), `_gsheets.ts`/`oauth-authorize.ts`/
+`oauth-callback.ts`/`sheet-v4.ts` (không cần nữa sau cutover), `knowsync.ts` (đồng bộ kiến thức —
+có thể gộp vào `migrate.mjs` sau).
+
+**LƯU Ý QUAN TRỌNG:** các file `api/*.ts` này chạy SONG SONG với `functions/api/*.ts` (Cloudflare) —
+CHƯA có gì trỏ dashboard sang dùng Vercel làm nguồn chính. Việc cutover thật (đổi DNS/deploy production
+sang Vercel, tắt Cloudflare) là quyết định riêng, ngoài phạm vi các đợt port này.
