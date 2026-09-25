@@ -68,8 +68,18 @@ export async function loadSheetFromDb(regionKey: string): Promise<ParsedSheet> {
   const missing = new Set<string>();
   const routes: Route[] = routesData.map((r) => {
     const rows = stopsByRoute.get(r.id) ?? [];
+    // Bỏ điểm TRÙNG HỆT — PHẢI khớp dedup trong src/lib/sheet.ts (loadSheetUncached) + migrate.mjs
+    // (parseRoutes): 1 tuyến có thể liệt kê ở NHIỀU "Loại tuyến" trong Sheet gốc, không lọc sẽ nhân
+    // đôi số điểm dừng khi so sánh với loadSheet() (xem compareSheetSupabase.ts).
+    const seen = new Set<string>();
+    const dedupedRows = rows.filter((sr) => {
+      const sig = `${sr.warehouse_name}|${sr.loai_hinh}|${sr.gio_toi}|${sr.gio_roi}|${sr.sheet_row_id || ""}`;
+      if (seen.has(sig)) return false;
+      seen.add(sig);
+      return true;
+    });
     let mappedCount = 0;
-    const stops: Stop[] = rows.map((sr) => {
+    const stops: Stop[] = dedupedRows.map((sr) => {
       const kho = (sr.warehouse_name || "").trim();
       const coord = lookupCoord(kho);
       if (kho) { if (coord) mappedCount++; else missing.add(kho); }

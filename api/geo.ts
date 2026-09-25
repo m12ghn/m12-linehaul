@@ -10,7 +10,18 @@
    ============================================================ */
 export const config = { runtime: "edge" };
 
-import { db, json } from "./_kv";
+import { db } from "./_kv";
+
+// Cache-Control riêng cho endpoint này (khác json() mặc định no-store trong _kv.ts):
+// src/lib/planner.ts gọi initLiveGeo() (-> /api/geo) MỖI LẦN tính lịch (planSchedule), dựa vào cache
+// rẻ để lặp lại nhiều lần không tốn round-trip DB — PHẢI giữ cùng mức cache 5 phút như bản Cloudflare
+// gốc (KV cache 5'), nếu không mỗi lần tính lịch sẽ query thẳng Postgres trên đường găng của tính năng.
+function geoJson(obj: unknown, status = 200): Response {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=300" },
+  });
+}
 
 interface WarehouseRow {
   warehouse_id: string | null;
@@ -22,12 +33,12 @@ interface WarehouseRow {
 
 export default async function handler(): Promise<Response> {
   const supa = db();
-  if (!supa) return json({ ok: false, geo: {}, error: "not_configured" });
+  if (!supa) return geoJson({ ok: false, geo: {}, error: "not_configured" });
 
   const { data, error } = await supa
     .from("warehouses")
     .select("warehouse_id, warehouse_name, normalized_name, latitude, longitude");
-  if (error) return json({ ok: false, geo: {}, error: error.message });
+  if (error) return geoJson({ ok: false, geo: {}, error: error.message });
 
   const geo: Record<string, [number, number]> = {};
   const places: { id: string; name: string }[] = [];
@@ -37,5 +48,5 @@ export default async function handler(): Promise<Response> {
     places.push({ id: row.warehouse_id || "", name: row.warehouse_name });
   }
 
-  return json({ ok: true, count: Object.keys(geo).length, at: Date.now(), geo, places });
+  return geoJson({ ok: true, count: Object.keys(geo).length, at: Date.now(), geo, places });
 }

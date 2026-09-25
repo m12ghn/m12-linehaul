@@ -134,7 +134,10 @@ const NHATKY_CHUYEN_GID = "2119716240";
 const SOURCES = [
   // --- Lịch tải (6 tab SHEETS) — silver: routes + route_stops ---
   { key: "routes:noi-thanh-hcm", sheetId: SHEET_ID, gid: "0", silver: "routes", region: "noi-thanh-hcm" },
-  { key: "routes:noi-vung-hcm", sheetId: SHEET_ID, gid: "961518640", silver: "routes", region: "noi-vung-hcm" },
+  // "noi-vung-hcm" KHÔNG còn là dữ liệu tuyến Lịch Tải nữa (xem comment SHEETS trong src/config.ts:
+  // nội dung đã đổi thành bảng BC↔NCC↔chat_id, không có cột tải trọng) -> KHÔNG parse Silver "routes"
+  // (sẽ ra rác nếu ép dò cột route/kho như tab thật) -> giữ Bronze để đối chiếu/khôi phục khi cần.
+  { key: "routes:noi-vung-hcm", sheetId: SHEET_ID, gid: "961518640" },
   { key: "routes:lien-vung-mn", sheetId: SHEET_ID, gid: "84848529", silver: "routes", region: "lien-vung-mn" },
   { key: "routes:mbh-song-than", sheetId: SHEET_ID, gid: "541305122", silver: "routes", region: "mbh-song-than" },
   { key: "routes:mbh-tan-tao", sheetId: SHEET_ID, gid: "1937583700", silver: "routes", region: "mbh-tan-tao" },
@@ -223,6 +226,16 @@ async function parseRoutes(rows, region, runSummary) {
       .select("id").single();
     if (upErr) { runSummary.errors.push(`routes:${region}/${routeName}: ${upErr.message}`); continue; }
     await db.from("route_stops").delete().eq("route_id", up.id); // xoá bản cũ trước khi ghi lại (import 1 lần, idempotent)
+    // Bỏ điểm TRÙNG HỆT (cùng kho + loại hình + giờ tới + giờ rời + id) — PHẢI khớp logic dedup
+    // trong src/lib/sheet.ts: 1 tuyến có thể liệt kê ở NHIỀU "Loại tuyến" trong sheet, không lọc sẽ
+    // nhân đôi số điểm dừng trong route_stops (khác số liệu client đang hiển thị từ Sheet trực tiếp).
+    const seen = new Set();
+    route.stops = route.stops.filter((s) => {
+      const sig = `${s.warehouse_name}|${s.loai_hinh}|${s.gio_toi}|${s.gio_roi}|${s.sheet_row_id || ""}`;
+      if (seen.has(sig)) return false;
+      seen.add(sig);
+      return true;
+    });
     const stopsPayload = route.stops.map((s) => ({ route_id: up.id, region_key: region, ...s }));
     for (let i = 0; i < stopsPayload.length; i += 500) {
       const { error } = await db.from("route_stops").insert(stopsPayload.slice(i, i + 500));
