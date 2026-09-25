@@ -40,7 +40,7 @@ lưu. `kv_store` **KHÔNG có RLS public** (chỉ Vercel Edge Function dùng `SU
 | `accounts.ts`, `auth.ts`, `_session.ts` | Đăng nhập + quản lý tài khoản tự chế (PBKDF2 + HMAC session) | **Thay bằng Supabase Auth** (OTP email có sẵn) — đã scaffold `src/lib/supabaseAuth.ts`, **CHƯA wire vào App.tsx** | ⚠️ Cao — đổi cơ chế đăng nhập của người dùng thật, cần Sếp xác nhận thời điểm cutover trước khi bật |
 | `_admin.ts` | Check quyền admin | Thay bằng RLS (`user_roles.role_id = 'admin'`) — không cần hàm riêng phía server nữa | Trung bình, đi cùng auth |
 | `_gsheets.ts`, `oauth-authorize.ts`, `oauth-callback.ts` | Ghi Sheet bằng service account + luồng xin quyền OAuth | Không cần nữa sau cutover, TRỪ KHI còn sheet nào khác chưa migrate (xem `bao-cao-tudong.ts`) | — |
-| `bao-cao-tudong.ts` | Đọc sheet "Lịch tải M12" (nhật ký chuyến thực tế, KHÁC sheet kế hoạch) cho báo Telegram | **Cần hỏi Sếp**: có migrate luôn sheet này vào Supabase không, hay giữ đọc trực tiếp Sheet (vẫn cần OAuth) | Cần quyết định |
+| `bao-cao-tudong.ts` | Đọc sheet "Lịch tải M12" (nhật ký chuyến thực tế, KHÁC sheet kế hoạch) cho báo Telegram | ✅ Sếp chốt 2026-09-25: **migrate luôn** — đã thêm source `nhat-ky-chuyen-thuc-te` (OAuth) vào `migrate.mjs`, ghi Bronze (`raw_sheet_snapshot`) — đây vốn là 1 cuốn nhật ký/log nên giữ nguyên văn là đủ, chưa cần Silver | Đã migrate (Bronze) |
 | `route.ts` | Proxy Google Maps Directions (giấu key) | Port thẳng — Vercel Edge Function đọc `GOOGLE_MAPS_KEY` từ env Vercel thay vì `kv_store`/env Cloudflare | Thấp |
 | `aiconfig.ts`, `assistant.ts` | Cấu hình khoá + Trợ lý AI đa nhà cung cấp (Gemini chính + Cloudflare Workers AI nền + 14 provider dự phòng) | **Cần Sếp quyết định trước khi port**: Cloudflare Workers AI (nguồn free hiện tại) KHÔNG tồn tại trên Vercel → phải chọn 1 nhà cung cấp LLM trả phí chính thức (Anthropic/Gemini API trực tiếp/OpenAI...) và cấp API key trong Vercel. Đây là thay đổi có **chi phí thực tế**, không tự quyết được | ⚠️ Cao — chặn bởi quyết định của Sếp |
 | `knowsync.ts` | Đồng bộ kiến thức bổ sung 1 lần/ngày từ Sheet | Có thể gộp vào `supabase/migrate.mjs` (chạy định kỳ qua Vercel Cron) sau khi có bảng `knowledge` — chưa làm | Thấp, chưa cấp thiết |
@@ -57,17 +57,19 @@ lưu. `kv_store` **KHÔNG có RLS public** (chỉ Vercel Edge Function dùng `SU
 - `src/lib/supabaseAuth.ts` — helper đăng nhập OTP qua Supabase Auth, **CHƯA wire vào `App.tsx`**
   (đăng nhập thật của Dash vẫn dùng `_session.ts`/Cloudflare như cũ cho tới khi Sếp xác nhận cutover).
 
-## Cần Sếp quyết định trước khi làm tiếp
+## Quyết định của Sếp (2026-09-25)
 
-1. **Chọn nhà cung cấp LLM chính thức cho Trợ lý AI trên Vercel** (Anthropic/Gemini API trực tiếp/
-   OpenAI...) + đồng ý phát sinh chi phí theo request — Cloudflare Workers AI free hiện tại không có
-   trên Vercel.
-2. **Thời điểm chuyển cơ chế đăng nhập** sang Supabase Auth — ảnh hưởng trực tiếp người dùng thật,
-   cần xác nhận rõ trước khi bật (không tự động flip).
-3. **Sheet "Lịch tải M12" (nhật ký thực tế, dùng cho báo Telegram tự động)** — migrate vào Supabase
-   luôn hay giữ đọc Sheet riêng qua OAuth.
+1. **Nhà cung cấp LLM cho Trợ lý AI trên Vercel** — **CHƯA chọn, quyết định sau.** Đã làm rõ: KHÔNG
+   dùng được gói Claude Max (claude.ai) — license đó chỉ cho cá nhân dùng qua app/CLI Claude, không
+   được dùng làm backend phục vụ nhiều người dùng khác. Khi chọn xong nhà cung cấp, cần tạo **API key
+   riêng trả phí** (vd console.anthropic.com cho Anthropic) và cấu hình trong Vercel env — việc port
+   `assistant.ts`/`aiconfig.ts` VẪN CHỜ bước này.
+2. **Thời điểm cutover đăng nhập sang Supabase Auth** — **quyết định sau.** Đăng nhập thật vẫn dùng
+   Cloudflare (`_session.ts`) cho tới khi có xác nhận rõ ràng.
+3. **Sheet "Lịch tải M12" (nhật ký thực tế)** — ✅ **migrate luôn**, đã thêm vào `migrate.mjs` (Bronze).
 
-Sau khi có 3 quyết định trên, port tiếp theo thứ tự: nhóm `kv_store` đơn giản (qa/report/knowledge/
-dashdata/users) → RBAC (`roles.ts` → `user_roles`) → `geo.ts` (đổi sang query `warehouses`) →
-`lichtai-edit.ts` (UPDATE trực tiếp DB) → auth (Supabase Auth, sau khi Sếp xác nhận) → AI assistant
-(sau khi chọn nhà cung cấp).
+## Việc có thể làm tiếp NGAY (không chờ 2 quyết định còn treo)
+
+Nhóm `kv_store` đơn giản (qa/report/knowledge/dashdata/users) → RBAC (`roles.ts` → `user_roles`) →
+`geo.ts` (đổi sang query `warehouses`) → `lichtai-edit.ts` (UPDATE trực tiếp DB). Auth và AI assistant
+port sau khi có quyết định 1 và 2.

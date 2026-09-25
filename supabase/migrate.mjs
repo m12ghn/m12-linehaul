@@ -125,6 +125,11 @@ const VEHICLE_SHEET_ID = "1YBnuXDh6pZEQ0DpfLCPYV1jNK6J4CtocuP7FM1VeOxc";
 const GXT_SHEET_ID = "1otLFPSLRKtBk-2WXdXnVSHbJMwtIzqMBmJnZ5M7bl7c";
 const KNOWLEDGE_SHEET_ID = "1mvu295K_b3AtVkAyNSZKrYHAU-xlp-UyhwZ8CXQUKks";
 const WAREHOUSE_GEO_SHEET_ID = "1lqkSifW2ROTnlYMqhBNcKgHgDd5z-ktcn60cCawqyRs";
+// Sheet "Lịch tải M12" — nhật ký chuyến THỰC TẾ (KHÁC sheet lịch tải KẾ HOẠCH SHEET_ID ở trên),
+// dùng cho báo cáo tự động Telegram — xem functions/api/bao-cao-tudong.ts. Sếp xác nhận 2026-09-25:
+// migrate luôn (Bronze — đây vốn là 1 cuốn nhật ký/log, giữ nguyên văn là đủ, chưa cần Silver).
+const NHATKY_CHUYEN_SHEET_ID = "1qencarSmiH1-BukeHTTG1MFsbJLBIBDn6drGIhZP-nU";
+const NHATKY_CHUYEN_GID = "2119716240";
 
 const SOURCES = [
   // --- Lịch tải (6 tab SHEETS) — silver: routes + route_stops ---
@@ -137,6 +142,9 @@ const SOURCES = [
 
   // --- Toạ độ kho (KHÔNG public — cần OAuth, xem fetchViaOAuth) — silver: warehouses ---
   { key: "warehouses", sheetId: WAREHOUSE_GEO_SHEET_ID, gid: "0", silver: "warehouses", oauthOnly: true },
+
+  // --- Nhật ký chuyến thực tế (KHÔNG public — cần OAuth) — bronze only, xem PHA3-PLAN.md ---
+  { key: "nhat-ky-chuyen-thuc-te", sheetId: NHATKY_CHUYEN_SHEET_ID, gid: NHATKY_CHUYEN_GID, oauthOnly: true },
 
   // --- TLLD (4 tab hub, cấu trúc cố định) — silver: tlld_daily ---
   { key: "tlld:HCM01", sheetId: TLLD_SHEET_ID, gid: "1276580053", silver: "tlld", hub: "HCM01" },
