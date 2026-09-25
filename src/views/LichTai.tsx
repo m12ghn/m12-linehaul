@@ -11,6 +11,7 @@ import { usePlaceIds } from "../lib/allRoutes";
 import { useTlld } from "../lib/useTlld";
 import { normCode } from "../lib/tlld";
 import { loadSheet } from "../lib/sheet";
+import { SupabaseShadowCompare } from "../components/SupabaseShadowCompare";
 import { VISIBLE_SHEETS } from "../config";
 import type { Route, SheetData } from "../types";
 
@@ -53,6 +54,7 @@ export function LichTai({
   mapMode,
   setMapMode,
   gid,
+  regionKey,
   canEdit,
   onSaved,
   onSwitchRegion,
@@ -70,6 +72,8 @@ export function LichTai({
   mapMode: "auto" | "mymap";
   setMapMode: (m: "auto" | "mymap") => void;
   gid?: string;
+  /** key vùng (khớp SHEETS trong config.ts) — dùng cho panel đối chiếu Supabase (Pha 1). */
+  regionKey?: string;
   canEdit?: boolean;
   onSaved?: () => void;
   /** Chuyển sang vùng khác (theo gid) — dùng khi tìm không thấy ở vùng hiện tại nhưng có ở vùng khác. */
@@ -271,6 +275,8 @@ export function LichTai({
           )
         }
       />
+
+      {gid && regionKey && <SupabaseShadowCompare gid={gid} regionKey={regionKey} isAdmin={canEdit} />}
 
       <div className="split">
         <div className="list-frame" ref={frameRef} onScroll={onListScroll}>

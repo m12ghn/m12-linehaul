@@ -145,6 +145,7 @@ export default function App() {
                 mapMode={mapMode}
                 setMapMode={setMapMode}
                 gid={sheet.gid}
+                regionKey={sheet.key}
                 canEdit={user?.roleId === "admin"}
                 onSaved={refreshSoon}
                 onSwitchRegion={(g) => { const s = VISIBLE_SHEETS.find((x) => x.gid === g); if (s) setSheetKey(s.key); }}
