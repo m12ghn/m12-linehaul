@@ -79,7 +79,34 @@ lại nhiều lần không nhân đôi dữ liệu. `vehicle_assignments` không
 Có sai lệch → xem lại `raw_sheet_snapshot.fetch_error` / cột `note` trong bảng in ra khi
 chạy script, KHÔNG tự sửa số cho khớp (đúng nguyên tắc "không bịa số liệu" của dự án).
 
-## 6. Ngoài phạm vi Pha 0 (để Pha 1)
+## 6. Pha 1 — đọc song song từ Dashboard để đối chiếu
+
+Sau khi Pha 0 chạy xong và đối chiếu số liệu khớp, bật panel đối chiếu ngay trong Dashboard:
+
+1. Trong `.env` (dự án gốc, không phải `supabase/.env`), thêm:
+   ```
+   VITE_SUPABASE_URL=https://xxxx.supabase.co
+   VITE_SUPABASE_ANON_KEY=eyJ...        # anon key, KHÔNG phải service_role
+   VITE_SUPABASE_SHADOW_COMPARE=1
+   ```
+2. `npm run dev` (hoặc build lại) → đăng nhập tài khoản **admin** → mở menu **Lịch Tải** → cuộn xuống
+   dưới dải trạng thái (StatusBar) sẽ thấy panel **"🧪 Pha 1 — Đối chiếu Sheet vs Supabase"**.
+3. Bấm **So sánh ngay**: tải song song `loadSheet()` (Google Sheet, như cũ) và `loadSheetFromDb()`
+   (`src/lib/sheetFromDb.ts`, đọc bảng `routes`/`route_stops` trong Supabase) cho vùng đang xem, rồi
+   diff số tuyến, số điểm dừng, tải trọng, loại tuyến, BKS.
+
+Panel này:
+- **Chỉ hiện với admin** và **chỉ khi bật cờ** `VITE_SUPABASE_SHADOW_COMPARE=1` — mặc định (cờ trống)
+  không render gì, không gọi Supabase, không ảnh hưởng người dùng thường hay dashboard production.
+- **Chỉ so sánh khi bấm nút** — không tự chạy nền, không thêm tải cho mỗi lần mở trang.
+- Toạ độ (`missingGeo`) vẫn tra qua `src/lib/geo.ts` (geo.json + `/api/geo`) ở cả 2 phía — Pha 1 này
+  CHƯA đổi nguồn toạ độ sang bảng `warehouses`, để tách riêng việc so sánh dữ liệu tuyến khỏi việc so
+  sánh nguồn toạ độ (sẽ làm ở bước sau khi routes/route_stops đã đối chiếu ổn định).
+
+Dashboard **không đổi hành vi mặc định** ở Pha 1 — `loadSheet()`/`useSchedule` vẫn là nguồn dữ liệu
+chính thức cho mọi người dùng cho tới khi có quyết định cutover (Pha 2+).
+
+## 7. Ngoài phạm vi Pha 0/1
 
 Các nguồn sau **chỉ có ở Bronze** (`raw_sheet_snapshot`), chưa có bảng Silver riêng — sẽ
 thiết kế khi làm Pha 1 cho view tương ứng, vì cấu trúc cột phụ thuộc UI sẽ đọc gì:

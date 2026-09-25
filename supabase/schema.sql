@@ -137,3 +137,33 @@ create table if not exists migration_runs (
   finished_at timestamptz,
   summary jsonb                    -- { "<source_key>": { sheetCount, dbCount, error } }
 );
+
+-- ------------------------------------------------------------
+-- RLS (PHA 1) — Dashboard đọc trực tiếp từ trình duyệt bằng anon key
+-- (xem src/lib/supabaseClient.ts). Chỉ cho SELECT công khai trên các
+-- bảng SILVER dùng để hiển thị (đúng mức lộ dữ liệu như Sheet "Ai có
+-- liên kết -> Người xem" hiện tại). Bronze (raw_sheet_snapshot) và
+-- migration_runs KHÔNG có policy public -> chỉ service_role (migrate.mjs)
+-- đọc/ghi được, tránh lộ toàn bộ Sheet thô ra client.
+-- ------------------------------------------------------------
+alter table routes enable row level security;
+alter table route_stops enable row level security;
+alter table warehouses enable row level security;
+alter table tlld_daily enable row level security;
+alter table vehicle_assignments enable row level security;
+alter table raw_sheet_snapshot enable row level security;
+alter table migration_runs enable row level security;
+
+-- CREATE POLICY không có IF NOT EXISTS trong Postgres -> drop trước rồi tạo lại, chạy lại
+-- schema.sql nhiều lần không lỗi "policy already exists".
+drop policy if exists "public read routes" on routes;
+create policy "public read routes" on routes for select using (true);
+drop policy if exists "public read route_stops" on route_stops;
+create policy "public read route_stops" on route_stops for select using (true);
+drop policy if exists "public read warehouses" on warehouses;
+create policy "public read warehouses" on warehouses for select using (true);
+drop policy if exists "public read tlld_daily" on tlld_daily;
+create policy "public read tlld_daily" on tlld_daily for select using (true);
+drop policy if exists "public read vehicle_assignments" on vehicle_assignments;
+create policy "public read vehicle_assignments" on vehicle_assignments for select using (true);
+-- KHÔNG tạo policy select cho raw_sheet_snapshot / migration_runs -> mặc định chặn hết với anon key.
